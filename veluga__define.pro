@@ -12,8 +12,8 @@ END
 FUNCTION veluga::allocate, nn, type=type
 
 	CASE type OF
-		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L}, nn)
-		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d}, nn)
+		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
+		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d}, nn)
 		ELSE: STOP
 	ENDCASE
 END
@@ -440,8 +440,7 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 	ENDELSE
 END
 
-FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, $
-	skiprd_domain=skiprd_domain, skiprd_time=skiprd_time, skiprd_time=skiprd_metal, simout=simout
+FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=simout
 
 	;;-----
 	;; Read Particle within a sphere
@@ -501,15 +500,15 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, $
 
 		;; skip domain reading
 		larr(15) = 0L
-		IF KEYWORD_SET(skiprd_domain) THEN larr(15) = 20L
+		IF settings.skiprd_domain EQ 1L THEN larr(15) = 20L
 
 		;; skip time reading
 		larr(16) = 0L
-		IF KEYWORD_SET(skiprd_time) THEN larr(16) = 20L
+		IF settings.skiprd_time EQ 1L THEN larr(16) = 20L
 
 		;; skip metal reading
 		larr(17) = 0L
-		IF KEYWORD_SET(skiprd_metal) THEN larr(17) = 20L
+		IF settings.skiprd_metal EQ 1L THEN larr(17) = 20L
 
 		;; famtype ver
 		larr(18) = 0L
@@ -540,6 +539,20 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, $
 	part.family = fam
 	part.domain = dl
 	part.id 	= id
+
+	IF ~KEYWORD_SET(simout) THEN BEGIN
+		part.xx 	*= (info.unit_l/3.086e21)	;; [kpc]
+		part.yy 	*= (info.unit_l/3.086e21)
+		part.zz 	*= (info.unit_l/3.086e21)
+
+		part.vx 	*= info.kms
+		part.vy 	*= info.kms
+		part.vz 	*= info.kms
+
+		part.mp 	*= (info.unit_m / 1.98892d33)
+
+	ENDIF
+
 	TOC, elapsed_time=elt2
 
     ;PRINT, elt1, ' - totnum ', elt2, ' - read all'
@@ -656,6 +669,9 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	cell.den 	= mesh_hd(*,0)
 	cell.temp 	= mesh_hd(*,4)
 	cell.zp 	= mesh_hd(*,5)
+
+	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
+
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
 
@@ -880,6 +896,92 @@ FUNCTION veluga::g_mag, lum, band
 
 	RETURN, mag
 END
+
+PRO veluga::g_potential, cell, part, $
+	p_type=p_type, e_type=e_type, bsize=bsize
+
+	;;-----
+	;; Compute potential using all mass components
+	;;
+	;;-----
+
+	settings 	= self->getheader()
+	IF ~KEYWORD_SET(p_type) THEN p_type = 'mesh'
+	IF ~KEYWORD_SET(e_type) THEN e_type = 'pole'
+	IF ~KEYWORD_SET(bsize) THEN bsize = 128L
+
+	;;-----
+	;; READ PARTICLES
+	;;-----
+	
+	;d3d_part 	= self->g_d3d(part.xx, part.yy, part.zz, [x0, y0, z0])
+	;cut_part 	= WHERE( (part.family EQ 1L OR part.family EQ 2L) AND d3d_part LT r0, npart)
+
+	;d3d_cell 	= self->g_d3d(cell.xx, cell.yy, cell.zz, [x0, y0, z0])
+	;cut_cell 	= WHERE(d3d_cell LT r0, ncell)
+
+	;;-----
+	;; ALLOCATE
+	;;-----
+
+	npart 	= N_ELEMENTS(part)
+	ncell 	= N_ELEMENTS(cell)
+
+	pos 	= DBLARR(npart+ncell,3)
+	mass 	= DBLARR(npart+ncell)
+
+	pos(0L:npart-1L,0) 	= part.xx
+	pos(0L:npart-1L,1) 	= part.yy
+	pos(0L:npart-1L,2) 	= part.zz
+	mass(0L:npart-1L) 	= part.mp
+
+	cut_part	= WHERE(part.family NE 1L AND part.family NE 2L, ntracer)
+	IF ntracer GE 1L THEN mass(cut_part) = 0.d
+
+	pos(npart:npart+ncell-1L,0) 	= cell.xx
+	pos(npart:npart+ncell-1L,1) 	= cell.yy
+	pos(npart:npart+ncell-1L,2) 	= cell.zz
+	mass(npart:npart+ncell-1L)	 	= cell.mp
+
+	pot 	= DBLARR(npart+ncell)
+	force 	= DBLARR(npart+ncell)
+	IF N_ELEMENTS(mass) LE bsize THEN bsize = 4L
+
+	STOP
+	;;-----
+	;; Compute potential
+	;;-----
+	Gconst 		= 6.67408d-11 		;; m^3 kg^-1 s^-2
+	mtokpc 		= (1./3.086d19)
+	kgtoMsun 	= (1./1.98892d30)
+	Gconst 		*= (mtoKpc / kgtoMsun * 1d-6)	;; (km/s)^2 Kpc/Msun
+
+
+	ftr_name 	= settings.dir_lib + 'fortran/js_getpt_ft.so'
+		larr = LONARR(20) & darr = DBLARR(20)
+		larr(0)	= N_ELEMENTS(mass)
+		larr(1) = 3L	;; dimension
+		larr(2)	= self.num_thread
+		IF p_type EQ 'mesh' THEN larr(3) = 0L ELSE IF p_type EQ 'pm' THEN larr(3) = 1L
+		IF e_type EQ 'pole' THEN larr(4) = 0L ELSE IF e_type EQ 'part' THEN larr(4) = 1L
+
+		larr(10)	= 0L 	;; Tree dimension spliting type
+		larr(11)	= 0L 	;; Tree value spliting type
+		larr(12) 	= bsize
+
+		darr(0)	= Gconst
+
+	void 	= CALL_EXTERNAL(ftr_name, 'js_getpt_ft', $
+		larr, darr, pos, mass, pot, force)
+
+	part.PE 	= pot(0L:npart-1L) 		;; [km/s]^2
+	cell.PE 	= pot(npart:npart+ncell-1L)
+
+	;part(cut_part).KE 	= self->g_d3d( part(cut_part).vx, part(cut_part).vy, part(cut_part).vz, []
+	RETURN
+END
+
+
 
 ;;-----
 ;; TABLE GENERATOR & LOAD
