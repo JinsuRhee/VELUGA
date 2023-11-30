@@ -6,6 +6,11 @@ FUNCTION veluga::init, fname, num_thread=num_thread
 	self.rdheader, fname
 	self.num_thread	= num_thread
 
+	ptr 	= REPLICATE({tree:PTR_NEW(), key:PTR_NEW(), stat:-2L},2)
+	self.tree 	= PTR_NEW(ptr)
+	
+	settings 	= self.getheader()
+
 	RETURN, 1
 END
 
@@ -49,9 +54,12 @@ PRO veluga::rdheader, fname
 	(*self.header)	= settings
 END
 
+
 FUNCTION veluga::getheader
 	RETURN, *self.header
 END
+
+
 
 PRO veluga::errorout, str
 	settings 	= self->getheader()
@@ -367,6 +375,82 @@ FUNCTION veluga::r_cell, snap0, id0, rsize, horg=horg
 	RETURN, self->g_cell(gal.xc, gal.yc, gal.zc, rsize, snap0)
 END
 
+FUNCTION veluga::r_tree_load, horg=horg
+
+	IF horg EQ 'g' THEN tind = 0L
+	IF horg EQ 'h' THEN tind = 1L
+	;IF horg EQ 'g' THEN 
+
+	IF (*self.tree)(tind).stat EQ -2L THEN BEGIN
+		settings 	= self->getheader()
+
+		IF horg EQ 'g' THEN fname = settings.dir_catalog + 'Galaxy/tree/ctree.sav'
+		IF horg EQ 'h' THEN fname = settings.dir_catalog + 'Halo/tree/ctree.sav'
+
+		isfile 	= FILE_SEARCH(fname)
+		
+		IF STRLEN(isfile) GE 5L THEN BEGIN
+			RESTORE, fname
+
+			(*self.tree)(tind).key 	= PTR_NEW(tree_key)
+			(*self.tree)(tind).tree = PTR_NEW(complete_tree)
+			(*self.tree)(tind).stat = 1L
+			
+		ENDIF ELSE BEGIN
+			(*self.tree)(tind).stat = -1L
+		ENDELSE
+
+	ENDIF
+
+	RETURN, (*self.tree)(tind)
+	
+END
+FUNCTION veluga::r_tree, snap0, id0, horg=horg
+
+	;;-----
+	;; READ TREE
+	;;-----
+	tree 	= self->r_tree_load(horg=horg)
+
+	IF tree.stat EQ -1L THEN BEGIN
+		self->errorout, 'No tree data exists for ' + horg
+		RETURN, 1L
+	ENDIF
+	
+	key 	= (*tree.key)(0)
+	keyval 	= snap0 + id0*key
+	ind 	= (*tree.key)(keyval)
+	IF ind EQ -1L THEN RETURN, 1L
+	RETURN, *(*tree.tree)(ind)
+END
+
+FUNCTION veluga::r_evol, snap0, id0, horg=horg
+
+	;;-----
+	;; READ TREE
+	;;-----
+
+	tree 	= self->r_tree(snap0, id0, horg=horg)
+	
+	IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
+		self->errout, 'No tree data exists for ' + horg
+		RETURN, 1L
+	ENDIF
+
+	;;-----
+	;; First Galaxy
+	;;-----
+	g0 	= self->r_gal(snap0, id0, horg=horg)
+
+	n_gal 	= N_ELEMENTS(tree.id)
+	g 	= REPLICATE(g0, n_gal)
+
+	FOR i=0L, n_gal-1L DO BEGIN
+		g(i) 	= self->r_gal(tree.snap(i), tree.id(i), horg=horg)
+	ENDFOR
+
+	RETURN, g
+END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;-----
@@ -1260,7 +1344,7 @@ END
 ;;-----
 PRO veluga__define
 
-	void	= {veluga, header:PTR_NEW(), fname:PTR_NEW(), num_thread:1L}
+	void	= {veluga, header:PTR_NEW(), fname:PTR_NEW(), tree:PTR_NEW(), num_thread:1L}
 
 	;self->rdheader, *self,fname
 	;veluga->rdheader, *veluga.fname
