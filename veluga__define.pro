@@ -30,7 +30,8 @@ PRO veluga::rdheader, fname
 	FINDPRO, 'veluga__define', dirlist=dirlist, /noprint
 	
 	settings 	= {header:'^^', dir_lib:dirlist(0), $
-		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' '}
+		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' ', $
+		pp_msg_i:'%123123----- VELUGA (Post processing) -----', pp_msg_f:'%123123----------', pp_msg_0:' '}
 
 	
 	OPENR, 10, fname
@@ -68,6 +69,16 @@ PRO veluga::errorout, str
 	PRINT, str
 	PRINT, settings.erg_msg_0
 	PRINT, settings.erg_msg_f
+	RETURN
+END
+
+PRO veluga::ppout, str
+	settings 	= self->getheader()
+	PRINT, settings.pp_msg_i
+	PRINT, settings.pp_msg_0
+	PRINT, str
+	PRINT, settings.pp_msg_0
+	PRINT, settings.pp_msg_f
 	RETURN
 END
 ;;-----
