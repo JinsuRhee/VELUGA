@@ -81,6 +81,13 @@ PRO veluga::ppout, str
 	PRINT, settings.pp_msg_f
 	RETURN
 END
+
+PRO veluga::ppout2, str
+	settings 	= self->getheader()
+	PRINT, '		', str
+	RETURN
+END
+
 ;;-----
 ;; READ ROUTINE
 ;;-----
