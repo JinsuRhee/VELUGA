@@ -1,8 +1,8 @@
-PRO veluga_pp_runcheck, settings, runstat, ind, horg
+PRO veluga_pp_runcheck, settings, runstat, ind
 
 	dir 	= settings.dir_catalog
-	IF horg EQ 'g' THEN dir += 'Galaxy/'
-	IF horg EQ 'h' THEN dir += 'Halo/'
+	IF settings.horg EQ 'g' THEN dir += 'Galaxy/'
+	IF settings.horg EQ 'h' THEN dir += 'Halo/'
 	dir 	+= 'snap_' + STRING(runstat(ind).snap, format='(I4.4)')
 	runstat(ind).dir 	= dir
 	fname 	= dir + '/*.dat.properties.0'
@@ -19,6 +19,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 	IF ~KEYWORD_SET(num_thread) THEN num_thread = 10L
 	IF ~KEYWORD_SET(horg) THEN horg = 'g'
 
+	settings 	= CREATE_STRUCT(settings, 'horg', horg)
 	;;-----
 	;; CALL OBJECT
 	;;-----
@@ -54,15 +55,28 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 		veluga->ppout, '		snapshot ' + STRING(i,format='(I4.4)') + ' is starting'
 
 		;;----- RUN CHECK
-		veluga_pp_runcheck, settings, runstat, ind, horg
+		veluga_pp_runcheck, settings, runstat, ind
 
 		;;-----
 		;; READ Raw catalog data
 		;;-----
 		veluga->ppout2, 'Reading The Raw Catalog...'
-		runstat(ind).rv_raw 	= rv_RawCatalog(settings, runstat(ind), run=settings.pp_runtype.rd_catalog)
+		runstat(ind).rv_raw 	= rv_RawCatalog(settings, veluga, runstat(ind), run=settings.pp_runtype.catalog)
 
+		;;-----
+		;; READ Particle IDs
+		;;-----
+		veluga->ppout2, 'Reading The member ptcl ID...'
+		runstat(ind).rv_id 	= rv_ReadID(settings, veluga, runstat(ind), run=settings.pp_runtype.ptclid)
+
+		;;-----
+		;; PTCL Matching
+		;;-----
+		veluga->ppout2, 'Particle membership matching'
+		runstat(ind).rv_ptmatch 	= rv_PTMatch(settings, veluga, runstat(ind), run=settings.pp_runtype.ptmatch)
 		STOP
+
+		
 		;;---- RUN STAT CHECK
 		;;123123 no catalog file
 		;;		make txt file maybe?

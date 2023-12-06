@@ -276,7 +276,7 @@ FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
 	dmp_mass 	= 1./(settings.neff*1.d)^3 * (info.omega_M - info.omega_b) / info.omega_m
 	pinfo	= DBLARR(n_ptcl,9) -  1.0d8
 
-	ftr_name 	= settings.dir_lib + 'fortran/get_ptcl.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/get_ptcl.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) = n_ptcl
 		larr(1) = N_ELEMENTS(dom_list)
@@ -491,6 +491,74 @@ FUNCTION veluga::g_cdist, zarr
 
 	RETURN, cdist
 END
+
+PRO veluga::g_makearr, array, input, index, unitsize=unitsize, type=type
+	IF ~KEYWORD_SET(unitsize) THEN unitsize = 10000L
+	IF ~KEYWORD_SET(type) THEN type = 'F'
+
+	IF type NE 'L' AND type NE 'D' AND type NE 'F' AND type NE 'L64' THEN BEGIN
+		PRINT, '***** CURRENT TYPE IS NOT IMPLEMENTED'
+		STOP
+	ENDIF ELSE BEGIN
+		IF type EQ 'L' THEN dumarr = 'lonarr'
+		IF type EQ 'D' THEN dumarr = 'dblarr'
+		IF type EQ 'F' THEN dumarr = 'fltarr'
+		IF type EQ 'L64' THEN dumarr = 'lon64arr'
+	ENDELSE
+
+	;;-----
+	IF SIZE(input, /n_dimension) EQ 0L THEN input = [input]
+	IF SIZE(input, /n_dimension) EQ 1L THEN n_dim = 1L
+	IF SIZE(input, /n_dimension) GE 2L THEN n_dim = N_ELEMENTS(input(0,*))
+
+	;;-----
+	IF(n_dim EQ 1L) THEN n1 = N_ELEMENTS(input) 
+	IF(n_dim GE 2L) THEN n1 = N_ELEMENTS(input(*,0)) 
+
+	IF index LT 0L THEN BEGIN
+		IF n_dim EQ 1L THEN BEGIN
+			void	= EXECUTE('array = ' + STRTRIM(dumarr,2) + '(' + STRTRIM(unitsize,2) +  ')')
+		ENDIF ELSE BEGIN
+			void	= EXECUTE('array = ' + STRTRIM(dumarr,2) + '(' + $
+				STRTRIM(unitsize,2) + ',' + STRTRIM(n_dim,2) + ')')
+		ENDELSE
+		nn = -1L
+		n0	= 0L
+		n1	= n1-1L
+	ENDIF ELSE BEGIN
+		nn = index
+		n0	= nn
+		n1	= nn + n1 -1L
+	ENDELSE
+
+	;;-----
+	IF n_dim EQ 1L THEN n_size = N_ELEMENTS(array)
+	IF n_dim GE 2L THEN n_size = N_ELEMENTS(array(*,0))
+
+	;n0	= nn + 1L
+	;n1	= nn + n1
+	;n0	= nn
+	;n1	= nn + n1 - 1L
+
+	;;-----
+	IF n1 GE n_size - 1L THEN BEGIN
+		REPEAT BEGIN
+			IF n_dim EQ 1L THEN void = EXECUTE('array = [array, ' + $
+				STRTRIM(dumarr,2) + '(' + STRTRIM(unitsize,2)+ ')]')
+	        	IF n_dim GE 2L THEN void = EXECUTE('array = [array, ' + $
+				STRTRIM(dumarr,2) + '(' + STRTRIM(unitsize,2) + ',' + $
+			        STRTRIM(n_dim,2) + ')]')
+	
+			IF n_dim EQ 1L THEN n_size = N_ELEMENTS(array)
+			IF n_dim GE 2L THEN n_size = N_ELEMENTS(array(*,0))
+		ENDREP UNTIL n1 LT n_size
+	ENDIF
+
+	IF n_dim EQ 1L THEN array(n0>0L:n1) = input
+	IF n_dim GE 2L THEN array(n0>0L:n1,*) = input
+	
+	index = n1 + 1L
+END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
@@ -521,7 +589,7 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 
 	dom_list 	= LONARR(n_gal, n_mpi)
 
-	ftr_name 	= settings.dir_lib + 'fortran/find_domain.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/find_domain.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) 	= n_gal
 		larr(1) 	= n_mpi
@@ -567,7 +635,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	npart_tot 	= 0L
 	part_ind 	= LONARR(ncpu)
 
-	ftr_name 	= settings.dir_lib + 'fortran/jsrd_part_totnum.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/jsrd_part_totnum.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= ncpu
 		larr(2) = num_thread
@@ -593,7 +661,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;; READ
 	;;-----
 
-	ftr_name 	= settings.dir_lib + 'fortran/jsrd_part.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/jsrd_part.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= ncpu
 		larr(2)	= num_thread
@@ -699,7 +767,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;;-----
 	;; MEMORY ALLOCATE
 	;;-----
-	ftr_name 	= settings.dir_lib + 'fortran/jsamr2cell_totnum.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/jsamr2cell_totnum.so'
 	larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) = ncpu
 		larr(2) = 1L;settings.num_thread
@@ -727,7 +795,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;;-----
 	;; READ CELL
 	;;-----
-	ftr_name	= settings.dir_lib + 'fortran/jsamr2cell.so'
+	ftr_name	= settings.dir_lib + 'src/fortran/jsamr2cell.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= ncpu;icpu
 		larr(2)	= self.num_thread
@@ -847,7 +915,7 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 
 	dmp_mass 	= 1./(settings.neff*1.d)^3 * (info.omega_M - info.omega_b) / info.omega_m
 
-	ftr_name 	= settings.dir_lib + 'fortran/get_contam.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/get_contam.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) = n_gal
 		larr(1) = nn_dm
@@ -892,7 +960,7 @@ FUNCTION veluga::g_gyr, snap0, tconf
 	v1 	= DBLARR(n_part) - 1.0d8 
 	v2 	= DBLARR(n_part) - 1.0d8
 
-	ftr_name	= settings.dir_lib + 'fortran/prop_time.so'
+	ftr_name	= settings.dir_lib + 'src/fortran/prop_time.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= n_part
 		larr(1)	= self.num_thread
@@ -1059,7 +1127,7 @@ PRO veluga::g_potential, cell, part, $
 	Gconst 		*= (mtoKpc / kgtoMsun * 1d-6)	;; (km/s)^2 Kpc/Msun
 
 
-	ftr_name 	= settings.dir_lib + 'fortran/js_getpt_ft.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/js_getpt_ft.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= N_ELEMENTS(mass)
 		larr(1) = 3L	;; dimension
@@ -1319,8 +1387,8 @@ PRO veluga::t_miles_galex
 	tbl.metal 	= (10.^metal)*0.02
 	tbl.nuv 	= nuv2
 
-	age_arr		= js_unique(tbl.age)
-	met_arr		= js_unique(tbl.metal)
+	age_arr		= self->g_unique(tbl.age)
+	met_arr		= self->g_unique(tbl.metal)
 
 	;; Make 2D TABLE
 

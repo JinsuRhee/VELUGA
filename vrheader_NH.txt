@@ -31,5 +31,5 @@ skiprd_metal	= -1L	;; skip reading metal in particle data
 ## Post processing related
 ##-----
 pp_snap	= [20L, 1026L, 1L]	;; snapshot range [snap_i, snap_f, dsnap]
-pp_runtype 	= {rd_catalog:1L}
+pp_runtype 	= {rd_catalog:1L, rv_ptclid:1L}
 pp_saveprocess	= 1L 		;; 0L no save // 1L save
