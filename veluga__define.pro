@@ -996,12 +996,11 @@ FUNCTION veluga::g_sfr, xx, yy, zz, age, mass, xc, yc, zc, aperture=aperture, ti
 	;;		timewindow for SFR mesurement in Gyr unit
 	;;-----
 
-	PRINT, 'SFR value check should be done'
-	STOP
 
 	;; Default
 	IF ~KEYWORD_SET(aperture) THEN apreture = 10.d
 	IF ~KEYWORD_SET(timewindow) THEN timewindow = 0.1d
+	settings= self->getheader()
 
 	;; Allocate
 	n_part 	= N_ELEMENTS(xx)

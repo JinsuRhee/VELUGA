@@ -37,6 +37,7 @@
                 IF(dum .LT. dsize) sfr = sfr + mass(i)
         ENDIF
       ENDDO
+      !$OMP END PARALLEL DO
 
       sfr = sfr / dtime / 1.0d9
       darr(20) = sfr

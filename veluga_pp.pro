@@ -43,7 +43,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 	;; RUN
 	;;-----
 	runstat 	= REPLICATE({snap:-1L, iscatalog:-1L, dir:' ', $
-		rv_raw:PTR_NEW(1), rv_id:PTR_NEW(1), rv_ptmatch:PTR_NEW(1), rv_gprop:PTR_NEW(1) $
+		rv_raw:PTR_NEW(1), rv_id:PTR_NEW(1), rv_ptmatch:PTR_NEW(1), rv_bprop:PTR_NEW(1) $
 			}, settings.pp_snap(1)-settings.pp_snap(0)+1L)
 
 	ind 		= 0L
@@ -74,8 +74,12 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 		;;-----
 		veluga->ppout2, 'Particle membership matching'
 		runstat(ind).rv_ptmatch 	= rv_PTMatch(settings, veluga, runstat(ind), run=settings.pp_runtype.ptmatch)
-		STOP
-
+		
+		;;-----
+		;; Bulk Properties
+		;;-----
+		veluga->ppout2, 'Bulk properties computations'
+		runstat(ind).rv_bprop		= rv_Bprop(settings, veluga, runstat(ind), run=settings.pp_runtype.bprop)
 		
 		;;---- RUN STAT CHECK
 		;;123123 no catalog file
