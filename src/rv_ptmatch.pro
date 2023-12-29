@@ -1,4 +1,4 @@
-FUNCTION rv_ptmatch, settings, veluga, runstat, , run=run
+FUNCTION rv_ptmatch, settings, veluga, runstat, run=run
 
 dir_data	= runstat.dir
 

@@ -41,6 +41,9 @@ gfortran -fopenmp -fPIC -mcmodel=large -fno-range-check -c rv_match.f90 -o rv_ma
 gcc -fopenmp -fPIC -mcmodel=large -c rv_match_c2f.c -o rv_match_c2f.o
 gcc -shared -fopenmp rv_match.o rv_match_c2f.o -o rv_match.so -lgfortran
 
+gfortran -fopenmp -fPIC -c prop_sfr.f90 -o prop_sfr.o
+gcc -fopenmp -fPIC -c prop_sfr_c2f.c -o prop_sfr_c2f.o
+gcc -shared -fopenmp prop_sfr.o prop_sfr_c2f.o -o prop_sfr.so
 chmod 777 *.o *.so
 
 

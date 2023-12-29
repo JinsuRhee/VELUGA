@@ -979,6 +979,51 @@ FUNCTION veluga::g_gyr, snap0, tconf
 	RETURN, age
 END
 
+FUNCTION veluga::g_sfr, xx, yy, zz, age, mass, xc, yc, zc, aperture=aperture, timewindow=timewindow
+	;;-----
+	;; Compute SFR with given ptcls
+	;;	- xx, yy, and zz
+	;;		positions of ptcls in kpc unit (physical)
+	;;	- age, mass
+	;;		age of ptcls in Gyr
+	;;		mass of ptcls in Msun
+	;;	- xc, yc, and zc
+	;;		positions of the center
+	;;	- aperture
+	;;		aperture size in kpc unit
+	;;		if set to be negative, use all ptcls
+	;;	- timewindow
+	;;		timewindow for SFR mesurement in Gyr unit
+	;;-----
+
+	PRINT, 'SFR value check should be done'
+	STOP
+
+	;; Default
+	IF ~KEYWORD_SET(aperture) THEN apreture = 10.d
+	IF ~KEYWORD_SET(timewindow) THEN timewindow = 0.1d
+
+	;; Allocate
+	n_part 	= N_ELEMENTS(xx)
+
+	ftr_name	= settings.dir_lib + 'src/fortran/prop_sfr.so'
+		larr = LONARR(20) & darr = DBLARR(20)
+		larr(0)	= 1L
+		larr(1)	= n_part
+		larr(2)	= self.num_thread
+
+		darr(0)	= aperture
+		darr(10)= timewindow
+
+		void	= CALL_EXTERNAL(ftr_name, 'prop_sfr', $
+			larr, darr, $
+			DOUBLE(xx), DOUBLE(yy), DOUBLE(zz), DOUBLE(age), DOUBLE(mass), $
+			DOUBLE(xc), DOUBLE(yc), DOUBLE(zc))
+
+	sfr = darr(19)
+	RETURN, sfr
+END
+
 FUNCTION veluga::g_luminosity, mp, ap, zp, band
 
 	tbl_sdss 	= self->t_miles_sdss_load()
