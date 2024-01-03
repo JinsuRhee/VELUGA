@@ -16,7 +16,7 @@ IF run EQ 1L THEN BEGIN
 	ENDELSE
 ENDIF
 IF run EQ 2L THEN BEGIN
-	PRINT, '        %%%%% (No previous works are found)'
+	;PRINT, '        %%%%% (No previous works are found)'
 
 	output	= *runstat.rv_raw
 	idlist	= *runstat.rv_id
@@ -60,7 +60,7 @@ IF run EQ 2L THEN BEGIN
 	match_cutval	= 0.9999
 	N_itr = 0L & N_itrmax = 10L & dfact = 20.0
 
-	dmp_mass	= 1./(DOUBLE(settings.n_eff)^3) * $
+	dmp_mass	= 1./(DOUBLE(settings.neff)^3) * $
 		(siminfo.omega_m - siminfo.omega_b) / siminfo.omega_m
 
 	REPEAT BEGIN

@@ -1,4 +1,4 @@
-FUNCTION rv_RawCatalog, settings, runstat, run=run
+FUNCTION rv_RawCatalog, settings, veluga, runstat, run=run
 
 dir_data	= runstat.dir
 

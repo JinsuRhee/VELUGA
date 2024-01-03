@@ -10,6 +10,17 @@ PRO veluga_pp_runcheck, settings, runstat, ind
 	IF isfile GE 5L THEN runstat(ind).iscatalog = 1L
 	RETURN
 END
+PRO veluga_pp_initcompile, settings, veluga, runstat
+	void 	= rv_RawCatalog(settings, veluga, runstat(0), run=0L)
+	void 	= rv_ReadID(settings, veluga, runstat(0), run=0L)
+	void 	= rv_PTMatch(settings, veluga, runstat(0), run=0L)
+	void 	= rv_BProp(settings, veluga, runstat(0), run=0L)
+
+	dumarr 	= FINDGEN(10,10)
+	dumind 	= ARRAY_INDICES(dumarr, [1])
+	TIC
+	TOC, elapsed_time=elt
+END
 
 PRO veluga_pp, header, num_thread=num_thread, horg=horg
 
@@ -19,21 +30,26 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 	IF ~KEYWORD_SET(num_thread) THEN num_thread = 10L
 	IF ~KEYWORD_SET(horg) THEN horg = 'g'
 
-	settings 	= CREATE_STRUCT(settings, 'horg', horg)
+
 	;;-----
 	;; CALL OBJECT
 	;;-----
 	veluga	= OBJ_NEW('veluga', header, num_thread=num_thread)
 
 	settings 	= veluga->getheader()
+	settings 	= CREATE_STRUCT(settings, 'horg', horg)
+
+	runstat 	= REPLICATE({snap:-1L, iscatalog:-1L, dir:' ', elt:DBLARR(5), $
+		rv_raw:PTR_NEW(1), rv_id:PTR_NEW(1), rv_ptmatch:PTR_NEW(1), rv_bprop:PTR_NEW(1) $
+			}, settings.pp_snap(1)-settings.pp_snap(0)+1L)
+
 
 	;;-----
 	;; COMPILE ALL PROCEDURES FIRST
 	;;-----
-	;void 	= rv_RawCatalog(settings, ' ', run=0L)
-	;void 	= rv_ReadID(settings, ' ', run=0L)
-	;void 	= rv_PTMatch(settings, ' ', run=0L)
-	;void 	= rv_GProp(settings, ' ', run=0L)
+	veluga_pp_initcompile, settings, veluga, runstat(0)
+
+
 	;void 	= rv_RawCatalog(settings, ' ', run=0L)
 	;void 	= rv_RawCatalog(settings, ' ', run=0L)
 	;void 	= rv_RawCatalog(settings, ' ', run=0L)
@@ -42,15 +58,13 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 	;;-----
 	;; RUN
 	;;-----
-	runstat 	= REPLICATE({snap:-1L, iscatalog:-1L, dir:' ', $
-		rv_raw:PTR_NEW(1), rv_id:PTR_NEW(1), rv_ptmatch:PTR_NEW(1), rv_bprop:PTR_NEW(1) $
-			}, settings.pp_snap(1)-settings.pp_snap(0)+1L)
+	
 
 	ind 		= 0L
 	FOR i=settings.pp_snap(0), settings.pp_snap(1), settings.pp_snap(2) DO BEGIN
 
 		
-		TIC
+		
 		runstat(ind).snap 	= i
 		veluga->ppout, '		snapshot ' + STRING(i,format='(I4.4)') + ' is starting'
 
@@ -60,31 +74,55 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 		;;-----
 		;; READ Raw catalog data
 		;;-----
+		TIC
 		veluga->ppout2, 'Reading The Raw Catalog...'
-		runstat(ind).rv_raw 	= rv_RawCatalog(settings, veluga, runstat(ind), run=settings.pp_runtype.catalog)
+		runstat(ind).rv_raw 	= rv_RawCatalog(settings, veluga, runstat(ind), run=settings.pp_runtype.load_catalog)
+		TOC, elapsed_time=elt_lc
+		veluga->ppout2, '(Done in' + STRING(elt_lc,format='(F9.4)') + ' [s])'
+		veluga->ppout2, ' '
+		runstat(ind).elt(1) = elt_lc
 
 		;;-----
 		;; READ Particle IDs
 		;;-----
 		veluga->ppout2, 'Reading The member ptcl ID...'
-		runstat(ind).rv_id 	= rv_ReadID(settings, veluga, runstat(ind), run=settings.pp_runtype.ptclid)
+		TIC
+		runstat(ind).rv_id 	= rv_ReadID(settings, veluga, runstat(ind), run=settings.pp_runtype.read_ptclid)
+		TOC, elapsed_time=elt_rp
+		veluga->ppout2, '(Done in' + STRING(elt_rp,format='(F9.4)') + ' [s])'
+		veluga->ppout2, ' '
+		runstat(ind).elt(2) = elt_rp
 
 		;;-----
 		;; PTCL Matching
 		;;-----
 		veluga->ppout2, 'Particle membership matching'
-		runstat(ind).rv_ptmatch 	= rv_PTMatch(settings, veluga, runstat(ind), run=settings.pp_runtype.ptmatch)
-		
+		TIC
+		runstat(ind).rv_ptmatch 	= rv_PTMatch(settings, veluga, runstat(ind), run=settings.pp_runtype.member_match)
+		TOC, elapsed_time=elt_mm
+		veluga->ppout2, '(Done in' + STRING(elt_mm,format='(F9.4)') + ' [s])'
+		veluga->ppout2, ' '
+		runstat(ind).elt(3) = elt_mm
+
 		;;-----
 		;; Bulk Properties
 		;;-----
 		veluga->ppout2, 'Bulk properties computations'
-		runstat(ind).rv_bprop		= rv_Bprop(settings, veluga, runstat(ind), run=settings.pp_runtype.bprop)
-		
+		TIC
+		runstat(ind).rv_bprop		= rv_Bprop(settings, veluga, runstat(ind), run=settings.pp_runtype.compute_bulk)
+		TOC, elapsed_time=elt_cb
+		veluga->ppout2, '(Done in' + STRING(elt_cb,format='(F9.4)') + ' [s])'
+		veluga->ppout2, ' '
+		runstat(ind).elt(4) = elt_cb
+STOP
+
+elt 	= elt_lc + elt_rp + elt_mm + elt_cb
+
+		runstat(ind).elt(0) = elt
 		;;---- RUN STAT CHECK
 		;;123123 no catalog file
 		;;		make txt file maybe?
-		TOC, elapsed_time = elt
+		
 		ind ++
 	ENDFOR
 

@@ -99,7 +99,6 @@
          ENDDO
          nid = 1
 
-         
          !! Walk Tree
          CALL get_contam_walktree(xc(i), yc(i), zc(i), xp, mp, root, nid, aperture(i,:), cdata, n_aper, dmp_mass)
          DO l=1, n_aper

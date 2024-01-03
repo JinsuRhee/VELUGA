@@ -618,6 +618,8 @@ FUNCTION veluga::g_info, snap0
 	G       = 6.67259e-8
 	m_sun   = 1.98892e33
 
+	cgs 	= {kpc:kpc, hplanck:hplanck, eV:eV, kB:kB, clight:clight, Gyr:Gyr, mH:mH, G:G, m_sun:m_sun}
+
 	scale_l    = my_rarr(8)
 	scale_d    = my_rarr(9)
 	scale_t    = my_rarr(10)
@@ -633,7 +635,7 @@ FUNCTION veluga::g_info, snap0
 	scale_Z    = 1./0.02 
 	scale_flux = scale_v*scale_d*kpc*kpc*Gyr/m_sun
   
-	info={boxtokpc:my_rarr(0)*scale_l/kpc,tGyr:my_rarr(1)*scale_t/Gyr,boxlen:my_rarr(0),levmin:my_narr(2),levmax:my_narr(3),unit_l:scale_l,unit_d:scale_d,unit_t:scale_t,unit_m:scale_m,unit_v:scale_v,unit_nH:scale_nH,unit_T2:scale_T2,unit_Z:scale_Z,kms:scale_v/1d5,unit_flux:scale_d*scale_v*(1e-9*Gyr)*(kpc)*(kpc)/m_sun,aexp:my_rarr(2), H0:my_rarr(3), omega_m:my_rarr(4), omega_l:my_rarr(5), omega_k:my_rarr(6), omega_b:my_rarr(7), ncpu:my_narr(0), ndim:my_narr(1)}
+	info={cgs:cgs, boxtokpc:my_rarr(0)*scale_l/kpc,tGyr:my_rarr(1)*scale_t/Gyr,boxlen:my_rarr(0),levmin:my_narr(2),levmax:my_narr(3),unit_l:scale_l,unit_d:scale_d,unit_t:scale_t,unit_m:scale_m,unit_v:scale_v,unit_nH:scale_nH,unit_T2:scale_T2,unit_Z:scale_Z,kms:scale_v/1d5,unit_flux:scale_d*scale_v*(1e-9*Gyr)*(kpc)*(kpc)/m_sun,aexp:my_rarr(2), H0:my_rarr(3), omega_m:my_rarr(4), omega_l:my_rarr(5), omega_k:my_rarr(6), omega_b:my_rarr(7), ncpu:my_narr(0), ndim:my_narr(1)}
   
 	;;-----
 	;; Read Hilbert Indices
@@ -1000,6 +1002,7 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	xp(*,0)	= part.xx
 	xp(*,1)	= part.yy
 	xp(*,2)	= part.zz
+	mp 		= part.mp
 
 	;;-----
 	;; CFrac computation
@@ -1009,12 +1012,14 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	conf_n 	= DBLARR(n_gal, n_aper)
 	conf_m 	= DBLARR(n_gal, n_aper)
 
-	xc0 	= xc * 3.086d21/info.unit_l
-	yc0 	= yc * 3.086d21/info.unit_l
-	zc0 	= zc * 3.086d21/info.unit_l
+	xc0 	= xc; * 3.086d21/info.unit_l
+	yc0 	= yc; * 3.086d21/info.unit_l
+	zc0 	= zc; * 3.086d21/info.unit_l
+	aperture= aperture; * 3.086d21/info.unit_l
 	;rr0 	= rr * 3.086d21/info.unit_l
 
 	dmp_mass 	= 1./(settings.neff*1.d)^3 * (info.omega_M - info.omega_b) / info.omega_m
+	dmp_mass 	*= (info.unit_m / info.cgs.m_sun)
 
 	ftr_name 	= settings.dir_lib + 'src/fortran/get_contam.so'
 		larr = LONARR(20) & darr = DBLARR(20)
@@ -1031,8 +1036,8 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 
 	void 	= CALL_EXTERNAL(ftr_name, 'get_contam', $
 		larr, darr, settings.dir_raw, xc0, yc0, zc0, aperture, $
-		xp, part.mp, conf_n, conf_m)
-	
+		xp, mp, conf_n, conf_m)
+
 	RETURN, {N:conf_n, M:conf_m}
 END
 

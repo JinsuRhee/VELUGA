@@ -19,8 +19,8 @@ IF run EQ 2L THEN BEGIN
 	;;-----
 	;; I/O Settings
 	;;-----
-	IF settings.horg EQ 'h' THEN pref = 'halo'
-	IF settings.horg EQ 'g' THEN pref = 'galaxy'
+	IF settings.horg EQ 'h' THEN pref = '/halo'
+	IF settings.horg EQ 'g' THEN pref = '/galaxy'
 
 	dum_fname_pt	= dir_data + STRTRIM(pref,2) + '.dat.catalog_groups.*'
 	dum_fname_ptb	= dir_data + STRTRIM(pref,2) + '.dat.catalog_particles.*'
