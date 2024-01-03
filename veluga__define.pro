@@ -3,9 +3,10 @@ FUNCTION veluga::init, fname, num_thread=num_thread
 	IF ~KEYWORD_SET(num_thread) THEN num_thread = 1L
 
 	self.header	= PTR_NEW(/allocate)
-	self.rdheader, fname
 	self.num_thread	= num_thread
 
+
+	self.rdheader, fname
 	ptr 	= REPLICATE({tree:PTR_NEW(), key:PTR_NEW(), stat:-2L},2)
 	self.tree 	= PTR_NEW(ptr)
 	
@@ -29,7 +30,7 @@ PRO veluga::rdheader, fname
 
 	FINDPRO, 'veluga__define', dirlist=dirlist, /noprint
 	
-	settings 	= {header:'^^', dir_lib:dirlist(0), $
+	settings 	= {header:'^^', dir_lib:dirlist(0), num_thread:1L, $
 		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' ', $
 		pp_msg_i:'%123123----- VELUGA (Post processing) -----', pp_msg_f:'%123123----------', pp_msg_0:' '}
 
@@ -51,6 +52,7 @@ PRO veluga::rdheader, fname
 		void	= EXECUTE(v2)
 	ENDFOR
 	CLOSE, 10
+	settings.num_thread	= self.num_thread
 
 	(*self.header)	= settings
 END
@@ -564,13 +566,97 @@ END
 ;;	-- RAMSES RELATED
 ;;-----
 FUNCTION veluga::g_info, snap0
+
+	;;-----
+	;; Read info file
+	;;	employed from rd_info.pro
+	;;-----
 	str 	= STRING(snap0, format='(I5.5)')
 	settings 	= self.getheader()
-	rd_info, info, file=settings.dir_raw + 'output_' + str + '/info_' + str + '.txt'
+
+
+  	my_narr		= LONARR(6)
+	my_narr(0:5)  = 0L
+	my_rarr       = DBLARR(11)
+	my_rarr(0:10) = 0.
+  	
+	dataname      = string("",format='(a13)')
+
+	file 	= settings.dir_raw + '/output_' + str + '/info_' + str + '.txt'
+    OPENR,2,file
+  
+	value = 0L
+	FOR il = 0,5 DO BEGIN
+		READF, 2, dataname, value,format='(a13,I11)'
+		my_narr(il) = value
+	ENDFOR
+
+	data="alors je sais vraiment pas qupi mettre pour que ca marche"
+
+	READF, 2, data, format='(a50)'
+
+	value =0d0
+	FOR il = 0,10 DO BEGIN
+		READF, 2, dataname, value, format='(a13,E23.15)'
+		my_rarr(il) = value
+	ENDFOR
+	CLOSE, 2
+
+	;; unit in cgs
+	kpc     = 3.08568025e21
+	twopi   = 6.2831853d0
+	hplanck = 6.6262000d-27
+	eV      = 1.6022000d-12
+	kB      = 1.3806200d-16
+	clight  = 2.9979250d+10
+	Gyr     = 3.1536000d+16
+	X       = 0.76
+	Y       = 0.24 
+	rhoc    = 1.8800000d-29
+	mH      = 1.6600000d-24
+	mu_mol  = 1.2195d0
+	G       = 6.67259e-8
+	m_sun   = 1.98892e33
+
+	scale_l    = my_rarr(8)
+	scale_d    = my_rarr(9)
+	scale_t    = my_rarr(10)
+
+	;; scale_m convert mass in user units into g
+	scale_m    = scale_d*(DOUBLE(scale_l))^3
+	;; scale_v convert velocity in user units into cm/s
+	scale_v    = scale_l / scale_t
+	;; scale_T2 converts (P/rho) in user unit into (T/mu) in Kelvin
+	scale_T2   = mH/kB * scale_v^2.
+	scale_nH   = X/mH * scale_d
+	;; scale covert mettalicty into solar metallicity Z_sol = 0.02
+	scale_Z    = 1./0.02 
+	scale_flux = scale_v*scale_d*kpc*kpc*Gyr/m_sun
+  
+	info={boxtokpc:my_rarr(0)*scale_l/kpc,tGyr:my_rarr(1)*scale_t/Gyr,boxlen:my_rarr(0),levmin:my_narr(2),levmax:my_narr(3),unit_l:scale_l,unit_d:scale_d,unit_t:scale_t,unit_m:scale_m,unit_v:scale_v,unit_nH:scale_nH,unit_T2:scale_T2,unit_Z:scale_Z,kms:scale_v/1d5,unit_flux:scale_d*scale_v*(1e-9*Gyr)*(kpc)*(kpc)/m_sun,aexp:my_rarr(2), H0:my_rarr(3), omega_m:my_rarr(4), omega_l:my_rarr(5), omega_k:my_rarr(6), omega_b:my_rarr(7), ncpu:my_narr(0), ndim:my_narr(1)}
+  
+	;;-----
+	;; Read Hilbert Indices
+	;;-----
+	ncpu	= my_narr(0)
+	hindex	= DBLARR(ncpu,2)
+	OPENR, 2, file
+	str	= ' '
+	FOR i=0L, 20L DO READF, 2, str
+	FOR i=0L, ncpu-1L DO BEGIN
+ 	aa 	= DBLARR(3)
+ 	READF, 2, aa
+ 	hindex(i,0) = aa(1)
+ 	hindex(i,1) = aa(2)
+	ENDFOR
+	CLOSE, 2
+	info	= CREATE_STRUCT(info,'hindex', hindex)
+
+	;rd_info, info, file=settings.dir_raw + 'output_' + str + '/info_' + str + '.txt'
 	RETURN, info
 END
 
-FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
+FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	;;-----
 	;; Return domain list
 	;; 		positions are given in kpc unit
@@ -581,6 +667,8 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 
 	n_gal 	= N_ELEMENTS(xc2)
 	n_mpi 	= info.ncpu
+
+	IF N_ELEMENTS(xc2) NE N_ELEMENTS(rr2) THEN rr2 = xc2*0.d + MAX(rr2)
 
 	xc 	= DOUBLE(xc2)*3.086e21 / info.unit_l
 	yc 	= DOUBLE(yc2)*3.086e21 / info.unit_l
@@ -600,10 +688,23 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 	void 	= CALL_EXTERNAL(ftr_name, 'find_domain', $
 		xc, yc, zc, rr, info.hindex, info.levmax, dom_list, larr, darr)
 
-	cut 	= WHERE(dom_list GE 0L, ncut)
+	void 	= WHERE(dom_list GE 0L, ncut)
 
 	IF ncut GE 1L THEN BEGIN
-		RETURN, dom_list
+		dom_all 	= LONARR(n_gal*n_mpi)-1L
+		i0 	= 0L
+		FOR i=0L, n_gal-1L DO BEGIN
+			cut 		= WHERE(dom_list(i,*) GE 1L)
+			cut2 		= (ARRAY_INDICES(dom_list(i,*), cut))(1,*)
+			dom_list2	= self->g_unique(cut2) + 1L
+
+			i1 	= i0 + N_ELEMENTS(dom_list2)-1L
+			dom_all(i0:i1) 	= dom_list2
+			i0 	= i1 + 1L
+		ENDFOR
+		dom_all 	= self->g_unique(dom_all)
+		dom_all 	= dom_all(WHERE(dom_all GE 1L))
+		RETURN, dom_all
 	ENDIF ELSE BEGIN
 		self->errorout, '		g_domain: NO DOMAIN LEFT'
 		RETURN, 1L
@@ -621,8 +722,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	settings	= self->getheader()
 	num_thread = self.num_thread
 	IF ~KEYWORD_SET(dom_list) THEN BEGIN
-		dom_list 	= self->g_domain(xc2, yc2, zc2, rr2, snap0)
-		dom_list 	= WHERE(dom_list GE 1L) + 1L
+		dom_list 	= self->g_domain(snap0, xc2, yc2, zc2, rr2)
 	ENDIF
 
 	info 	= self->g_info(snap0)
@@ -741,8 +841,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	settings	= self->getheader()
 	num_thread = self.num_thread
 	IF ~KEYWORD_SET(dom_list) THEN BEGIN
-		dom_list 	= self->g_domain(xc2, yc2, zc2, rr2, snap0)
-		dom_list 	= WHERE(dom_list GE 1L) + 1L
+		dom_list 	= self->g_domain(snap0, xc2, yc2, zc2, rr2)
 	ENDIF
 
 	info 	= self->g_info(snap0)
@@ -867,29 +966,28 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 END
 
 
-FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
+FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	;;-----
 	;; Compute contamination fractions
 	;;		positions are given in kpc unit
-	;;		aperture in R_eff unit
+	;;		aperture in kpc unit
+	;;			shuld be in a [N_gal, N_aper] format
 	;;-----
 
 	settings	= self->getheader()
 	num_thread 	= self.num_thread
 	
-	IF ~KEYWORD_SET(aperture) THEN aperture = [1.d]
-
 	n_gal 	= N_ELEMENTS(xc)
-	n_aper	= N_ELEMENTS(aperture)
+	n_aper	= N_ELEMENTS(aperture(0,*))
 
 	;;------
 	;; Get Domain
 	;;------
-	dom_list 	= self->g_domain(xc, yc, zc, rr*MAX(aperture), snap0)
+	rr 	= xc
+	FOR i=0L, n_gal-1L DO rr(i) = MAX(aperture(i,*))
 
-	cut 	= WHERE(dom_list GE 1L)
-	cut2 	= (ARRAY_INDICES(dom_list, cut))(1,*)
-	dom_all	= self->g_unique(cut2) + 1L
+	dom_all 	= self->g_domain(snap0, xc, yc, zc, rr)
+
 
 	;;-----
 	;; Read all ptcls
@@ -897,8 +995,11 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 	part 	= self->g_part(0.d, 0.d, 0.d, 0.d, snap0, dom_list=dom_all)
 
 	dm_ind 	= WHERE(part.family EQ 1L, nn_dm)
-	dm_xp 	= part.xp(dm_ind,*)
-	dm_mm 	= part.mp(dm_ind)
+	part 	= part(dm_ind)
+	xp 	= DBLARR(N_ELEMENTS(part),3)
+	xp(*,0)	= part.xx
+	xp(*,1)	= part.yy
+	xp(*,2)	= part.zz
 
 	;;-----
 	;; CFrac computation
@@ -911,7 +1012,7 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 	xc0 	= xc * 3.086d21/info.unit_l
 	yc0 	= yc * 3.086d21/info.unit_l
 	zc0 	= zc * 3.086d21/info.unit_l
-	rr0 	= rr * 3.086d21/info.unit_l
+	;rr0 	= rr * 3.086d21/info.unit_l
 
 	dmp_mass 	= 1./(settings.neff*1.d)^3 * (info.omega_M - info.omega_b) / info.omega_m
 
@@ -929,8 +1030,8 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 		darr(0)	= dmp_mass
 
 	void 	= CALL_EXTERNAL(ftr_name, 'get_contam', $
-		larr, darr, settings.dir_raw, xc0, yc0, zc0, rr0, $
-		dm_xp, dm_mm, conf_n, conf_m, DOUBLE(aperture))
+		larr, darr, settings.dir_raw, xc0, yc0, zc0, aperture, $
+		xp, part.mp, conf_n, conf_m)
 	
 	RETURN, {N:conf_n, M:conf_m}
 END
@@ -1025,6 +1126,13 @@ END
 
 FUNCTION veluga::g_luminosity, mp, ap, zp, band
 
+	;;-----
+	;; Get Luminosity of given ptcls
+	;;
+	;;	mp in Msun
+	;; 	ap in Gyr
+	;;  zp in Zsun
+	;;-----
 	tbl_sdss 	= self->t_miles_sdss_load()
 	tbl_galex 	= self->t_miles_galex_load()
 
@@ -1044,6 +1152,8 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 			'z'		: BEGIN
 				ref_ml = tbl_sdss.z & ref_met = tbl_sdss.metal & ref_age = tbl_sdss.age & mag0 = 4.54 & END
 			'nuv'	: BEGIN
+				ref_ml = tbl_galex.nuv & ref_met = tbl_galex.metal & ref_age = tbl_galex.age & mag0 = 10.18 & END
+			'NUV'	: BEGIN
 				ref_ml = tbl_galex.nuv & ref_met = tbl_galex.metal & ref_age = tbl_galex.age & mag0 = 10.18 & END
 			ELSE: STOP
 		ENDCASE
@@ -1088,6 +1198,7 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 			'i'		: flux.i 	= lu
 			'z'		: flux.z 	= lu
 			'nuv'	: flux.nuv 	= lu
+			'NUV'	: flux.nuv 	= lu
 		ENDCASE
 	ENDFOR
 
@@ -1105,6 +1216,7 @@ FUNCTION veluga::g_mag, lum, band
 			'i'		: mag 	= 4.57 - 2.5 * ALOG10(TOTAL(lum))
 			'z'		: mag 	= 4.54 - 2.5 * ALOG10(TOTAL(lum))
 			'nuv'	: mag 	= 10.18 - 2.5 * ALOG10(TOTAL(lum))
+			'NUV'	: mag 	= 10.18 - 2.5 * ALOG10(TOTAL(lum))
 		ENDCASE
 	ENDFOR
 

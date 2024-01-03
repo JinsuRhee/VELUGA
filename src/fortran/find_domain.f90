@@ -59,66 +59,66 @@
                 jmax = jmin+1
                 kmin = int(zmin*dble(maxdom))
                 kmax = kmin+1
-         ENDIF
+        ENDIF
 
-         dkey=(dble(2**(levmax+1)/dble(maxdom)))**n_dim
-         n_dom = 1
-         IF(bit_length>0) n_dom = 8
-         idom(1)=imin; idom(2)=imax
-         idom(3)=imin; idom(4)=imax
-         idom(5)=imin; idom(6)=imax
-         idom(7)=imin; idom(8)=imax
-         jdom(1)=jmin; jdom(2)=jmin
-         jdom(3)=jmax; jdom(4)=jmax
-         jdom(5)=jmin; jdom(6)=jmin
-         jdom(7)=jmax; jdom(8)=jmax
-         kdom(1)=kmin; kdom(2)=kmin
-         kdom(3)=kmin; kdom(4)=kmin
-         kdom(5)=kmax; kdom(6)=kmax
-         kdom(7)=kmax; kdom(8)=kmax
+        dkey=(dble(2**(levmax+1)/dble(maxdom)))**n_dim
+        n_dom = 1
+        IF(bit_length>0) n_dom = 8
+        idom(1)=imin; idom(2)=imax
+        idom(3)=imin; idom(4)=imax
+        idom(5)=imin; idom(6)=imax
+        idom(7)=imin; idom(8)=imax
+        jdom(1)=jmin; jdom(2)=jmin
+        jdom(3)=jmax; jdom(4)=jmax
+        jdom(5)=jmin; jdom(6)=jmin
+        jdom(7)=jmax; jdom(8)=jmax
+        kdom(1)=kmin; kdom(2)=kmin
+        kdom(3)=kmin; kdom(4)=kmin
+        kdom(5)=kmax; kdom(6)=kmax
+        kdom(7)=kmax; kdom(8)=kmax
 
-         DO k=1,n_dom
-            if(bit_length>0)then
+        DO k=1,n_dom
+          if(bit_length>0)then
                call find_hilbert(idom(k),jdom(k),kdom(k),bounding(1),bit_length,1)
                order_min=bounding(1)
-            else
+          else
                order_min=0.0d0
-            endif
+          endif
             bounding_min(k)=(order_min)*dkey
             bounding_max(k)=(order_min+1.0D0)*dkey
-          ENDDO
+        ENDDO
 
-          cpu_min=0; cpu_max=0
+        cpu_min=0; cpu_max=0
 
-          do impi=1,n_mpi
-             do k=1,n_dom
-                if (   hindex(impi,1).le.bounding_min(k).and.&
-                     & hindex(impi,2).gt.bounding_min(k))then
-                   cpu_min(k)=impi
-                endif
-                if (   hindex(impi,1).lt.bounding_max(k).and.&
-                     & hindex(impi,2).ge.bounding_max(k))then
-                   cpu_max(k)=impi
-                endif
-             end do
-          end do
+        do impi=1,n_mpi
+           do k=1,n_dom
+              if (   hindex(impi,1).le.bounding_min(k).and.&
+                   & hindex(impi,2).gt.bounding_min(k))then
+                 cpu_min(k)=impi
+              endif
+              if (   hindex(impi,1).lt.bounding_max(k).and.&
+                   & hindex(impi,2).ge.bounding_max(k))then
+                 cpu_max(k)=impi
+              endif
+           end do
+        end do
 
-          cpu_read = .FALSE.
-          cpu_list = 0
-          ncpu_read = 0
-          do k=1,n_dom
-             do j=cpu_min(k),cpu_max(k)
-                if(.not. cpu_read(j))then
-                   ncpu_read=ncpu_read+1
-                   cpu_list(ncpu_read)=j
-                   cpu_read(j)=.TRUE.
-                endif
-             enddo
-          enddo
+        cpu_read = .FALSE.
+        cpu_list = 0
+        ncpu_read = 0
+        do k=1,n_dom
+           do j=cpu_min(k),cpu_max(k)
+              if(.not. cpu_read(j))then
+                 ncpu_read=ncpu_read+1
+                 cpu_list(ncpu_read)=j
+                 cpu_read(j)=.TRUE.
+              endif
+           enddo
+        enddo
 
-          DO j=1, ncpu_read
-            dom_list(i,cpu_list(j)) = 1
-          ENDDO
+        DO j=1, ncpu_read
+          dom_list(i,cpu_list(j)) = 1
+        ENDDO
       ENDDO
       !!$OMP PARALLEL DO default(shared) private(bnd, cpu, dum_int, j, cpu_list, ind_dom, bounding, dkey, order_min) schedule(static)
       !do i=1, n_ptcl

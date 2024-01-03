@@ -1,6 +1,6 @@
 !1234567        
-       SUBROUTINE get_contam(larr, darr, dir_raw, xc, yc, zc, rr, &
-                       xp, mp, conf_n, conf_m, conf_r)
+       SUBROUTINE get_contam(larr, darr, dir_raw, xc, yc, zc, aperture, &
+                       xp, mp, conf_n, conf_m)
 
        USE omp_lib
        USE js_kdtree
@@ -14,12 +14,12 @@
        INTEGER(KIND=4) larr(20)
 
        REAL(KIND=8) xc(larr(1)), yc(larr(1)), zc(larr(1))
-       REAL(KIND=8) rr(larr(1))
+       REAL(KIND=8) aperture(larr(1),larr(3))
 
        REAL(KIND=8) xp(larr(2), 3), mp(larr(2))
        REAL(KIND=8) conf_n(larr(1), larr(3))
        REAL(KIND=8) conf_m(larr(1), larr(3))
-       REAL(KIND=8) conf_r(larr(3))
+       !REAL(KIND=8) conf_r(larr(3))
 
        CHARACTER(LEN=larr(12)) dir_raw
 !!-----
@@ -101,7 +101,7 @@
 
          
          !! Walk Tree
-         CALL get_contam_walktree(xc(i), yc(i), zc(i), rr(i), xp, mp, root, nid, conf_r, cdata, n_aper, dmp_mass)
+         CALL get_contam_walktree(xc(i), yc(i), zc(i), xp, mp, root, nid, aperture(i,:), cdata, n_aper, dmp_mass)
          DO l=1, n_aper
            IF(cdata(l)%c_nall .EQ.0) THEN
              conf_n(i,l) = 0.
@@ -126,9 +126,9 @@
 
 CONTAINS
        !! WALK TREE
-       RECURSIVE SUBROUTINE get_contam_walktree(x0, y0, z0, r0, xp, mm, root, nid, conf_r, cdata, n_aper, dmp_mass)
+       RECURSIVE SUBROUTINE get_contam_walktree(x0, y0, z0, xp, mm, root, nid, conf_r, cdata, n_aper, dmp_mass)
        IMPLICIT NONE
-       REAL(KIND=8) x0, y0, z0, r0, box(8,3), gpos(3), ppos(3)
+       REAL(KIND=8) x0, y0, z0, box(8,3), gpos(3), ppos(3)
        REAL(KIND=8), DIMENSION(:, :), INTENT(IN) :: xp
        REAL(KIND=8), DIMENSION(:), INTENT(IN) :: mm
        !TYPE(dat), DIMENSION(:), INTENT(IN) :: part
@@ -143,7 +143,7 @@ CONTAINS
 
        !PRINT *, nid, root(nid)%bstart, root(nid)%bend, root(nid)%leaf, root(nid)%dmax
        !! Initialize
-       max_rr = conf_r(n_aper) * r0
+       max_rr = conf_r(n_aper)
        gpos(1) = x0; gpos(2) = y0; gpos(3) = z0
        node = root(nid)
        IF(js_kdtree_nodeskip(node, gpos, max_rr, 3)) RETURN
@@ -153,7 +153,7 @@ CONTAINS
 
          DO i=node%bstart, node%bend
            ppos(1) = xp(i,1); ppos(2) = xp(i,2); ppos(3) = xp(i,3)
-           gd2 = js_d3d(gpos, ppos) / r0
+           gd2 = js_d3d(gpos, ppos)
            DO j=1, n_aper
              IF(gd2 .GT. conf_r(j)) CYCLE
              cdata(j)%c_nall = cdata(j)%c_nall + 1.
@@ -170,10 +170,10 @@ CONTAINS
        ELSE
 
          nid = node%left
-         CALL get_contam_walktree(x0, y0, z0, r0, xp, mm, root, nid, conf_r, cdata, n_aper, dmp_mass)
+         CALL get_contam_walktree(x0, y0, z0, xp, mm, root, nid, conf_r, cdata, n_aper, dmp_mass)
 
          nid = node%right
-         CALL get_contam_walktree(x0, y0, z0, r0, xp, mm, root, nid, conf_r, cdata, n_aper, dmp_mass)
+         CALL get_contam_walktree(x0, y0, z0, xp, mm, root, nid, conf_r, cdata, n_aper, dmp_mass)
        ENDIF
 
 
