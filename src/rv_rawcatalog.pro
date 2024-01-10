@@ -7,8 +7,8 @@ dir_data	= runstat.dir
 ;;-----
 IF run EQ 0L THEN RETURN, PTR_NEW({rv_rawcatalog:-1},/no_copy)
 IF run EQ 1L THEN BEGIN
-	IF STRLEN(FILE_SEARCH(dir_data + 'rv_io.sav')) GE 5L THEN BEGIN
-		RESTORE, dir_data + 'rv_io.sav'
+	IF STRLEN(FILE_SEARCH(dir_data + '/rv_io.sav')) GE 5L THEN BEGIN
+		RESTORE, dir_data + '/rv_io.sav'
 		RETURN, PTR_NEW(output,/no_copy)
 	ENDIF ELSE BEGIN
 		run	= 2L
@@ -114,7 +114,7 @@ IF run EQ 2L THEN BEGIN
 			PRINT, '        ***** There is a wrong typed one in column_list'
 	ENDFOR
 
-	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + 'rv_io.sav', output
+	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + '/rv_io.sav', output
 	RETURN, PTR_NEW(output,/no_copy)
 ENDIF
 END

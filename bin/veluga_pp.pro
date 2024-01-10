@@ -15,7 +15,9 @@ PRO veluga_pp_initcompile, settings, veluga, runstat
 	void 	= rv_ReadID(settings, veluga, runstat(0), run=0L)
 	void 	= rv_PTMatch(settings, veluga, runstat(0), run=0L)
 	void 	= rv_BProp(settings, veluga, runstat(0), run=0L)
+	rv_save, settings, veluga, runstat(0), run=0L
 
+	simple_write_hdf5, 1, 1, 1, /skip
 	dumarr 	= FINDGEN(10,10)
 	dumind 	= ARRAY_INDICES(dumarr, [1])
 	TIC
@@ -39,7 +41,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 	settings 	= veluga->getheader()
 	settings 	= CREATE_STRUCT(settings, 'horg', horg)
 
-	runstat 	= REPLICATE({snap:-1L, iscatalog:-1L, dir:' ', elt:DBLARR(5), $
+	runstat 	= REPLICATE({snap:-1L, iscatalog:-1L, dir:' ', elt:DBLARR(6), $
 		rv_raw:PTR_NEW(1), rv_id:PTR_NEW(1), rv_ptmatch:PTR_NEW(1), rv_bprop:PTR_NEW(1) $
 			}, settings.pp_snap(1)-settings.pp_snap(0)+1L)
 
@@ -114,14 +116,34 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 		veluga->ppout2, '(Done in' + STRING(elt_cb,format='(F9.4)') + ' [s])'
 		veluga->ppout2, ' '
 		runstat(ind).elt(4) = elt_cb
-STOP
 
-elt 	= elt_lc + elt_rp + elt_mm + elt_cb
+		;;-----
+		;; SAVE catalog
+		;;-----
+		veluga->ppout2, 'Making hdf5 catalog'
+		TIC
+		rv_save, settings, veluga, runstat(ind), run=settings.pp_runtype.save
+		TOC, elapsed_time=elt_sv
+		veluga->ppout2, '(Done in' + STRING(elt_sv,format='(F9.4)') + ' [s])'
+		veluga->ppout2, ' '
+		runstat(ind).elt(5) = elt_sv
 
-		runstat(ind).elt(0) = elt
-		;;---- RUN STAT CHECK
-		;;123123 no catalog file
-		;;		make txt file maybe?
+		;;-----
+		;; FREE MEMORY
+		;;-----
+		PTR_FREE, runstat(ind).rv_raw
+		PTR_FREE, runstat(ind).rv_id
+		PTR_FREE, runstat(ind).rv_ptmatch
+		PTR_FREE, runstat(ind).rv_bprop
+
+		runstat(ind).elt(0)	= TOTAL(runstat(ind).elt(1L:-1L))
+		;;-----
+		;; REPORT
+		;;-----
+		veluga->ppout2, '		snapshot ' + STRING(i,format='(I4.4)') + ' is done'
+		veluga->ppout2, ' '
+		veluga->ppout2, '	Total Wall clock time : ' + STRING(runstat(ind).elt(0), format='(F9.4)')
+		veluga->ppout2, ' '
 		
 		ind ++
 	ENDFOR

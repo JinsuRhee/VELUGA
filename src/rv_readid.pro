@@ -6,8 +6,8 @@ dir_data        = runstat.dir
 ;;-----
 IF run EQ 0L THEN RETURN, PTR_NEW({p_id:-1, b_ind:-1, u_ind:-1},/no_copy)
 IF run EQ 1L THEN BEGIN
-	IF STRLEN(FILE_SEARCH(dir_data + 'rv_id.sav')) GE 5L THEN BEGIN
-		RESTORE, dir_data + 'rv_id.sav'
+	IF STRLEN(FILE_SEARCH(dir_data + '/rv_id.sav')) GE 5L THEN BEGIN
+		RESTORE, dir_data + '/rv_id.sav'
 		RETURN, PTR_NEW(output,/no_copy)
 	ENDIF ELSE BEGIN
 		run	= 2L
@@ -158,7 +158,7 @@ IF run EQ 2L THEN BEGIN
 	output  = CREATE_STRUCT('p_id', [id_bdn, id_ubd])
 	output  = CREATE_STRUCT(output, 'b_ind', bdn_ind, 'u_ind', ubd_ind + n_elements(id_bdn))
 
-	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + 'rv_id.sav', output
+	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + '/rv_id.sav', output
 	RETURN, PTR_NEW(output,/no_copy)
 ENDIF
 END

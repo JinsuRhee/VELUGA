@@ -93,6 +93,12 @@ END
 ;;-----
 ;; READ ROUTINE
 ;;-----
+FUNCTION veluga::r_gal_getdata, fid, str
+	did 	= H5D_OPEN(fid, str)
+	dumarr 	= H5D_READ(did)
+	H5D_CLOSE, did
+	RETURN, dumarr
+END
 FUNCTION veluga::r_gal, snap0, id0, horg=horg
 
 	;;-----
@@ -101,17 +107,6 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	IF ~KEYWORD_SET(horg) THEN horg = 'g'
 	settings	= self.getheader()
 	dir 		= settings.dir_catalog
-
-	;;-----
-	;; LOAD COLUMN
-	;;-----
-	gprop		= [settings.column_list, settings.gal_prop]
-
-	FOR i=0L, N_ELEMENTS(Gprop)-1L DO BEGIN
-		IF Gprop(i) EQ 'sfr' THEN Gprop(i) = 'SFR'
-		IF Gprop(i) EQ 'ABMAG' OR $
-			Gprop(i) EQ 'abmag' THEN Gprop(i) = 'ABmag'
-	ENDFOR
 
 	IF horg EQ 'g' THEN $
 		fname = dir + 'Galaxy/VR_Galaxy/snap_' + STRING(snap0,format='(I4.4)') + '.hdf5'
@@ -124,39 +119,68 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	fid	= H5F_OPEN(fname)
 
 	;;-----
-	;; ID AND MASS
+	;; READ OVERALL INFO FIRST
 	;;-----
-	did	= H5D_OPEN(fid, 'Mass_tot')
-	mass_tot 	= H5D_READ(did)
-	H5D_CLOSE, did
+	flux_list 	= self->r_gal_getdata(fid, 'Flux_List')
+	sfr_r 		= self->r_gal_getdata(fid, 'SFR_R')
+	sfr_t 		= self->r_gal_getdata(fid, 'SFR_T')
+	mag_r 		= self->r_gal_getdata(fid, 'MAG_R')
+	conf_r 		= self->r_gal_getdata(fid, 'CONF_R')
 
-	did	= H5D_OPEN(fid, 'Mvir')
-	mvir 	= H5D_READ(did)
-	H5D_CLOSE, did
+	mass_tot 	= self->r_gal_getdata(fid, 'Mass_tot')
+	r_halfmass	= self->r_gal_getdata(fid, 'R_HalfMass')
+	mvir 		= self->r_gal_getdata(fid, 'Mvir')
+	rvir 		= self->r_gal_getdata(fid, 'Rvir')
+	ID 			= self->r_gal_getdata(fid, 'ID')
+	conf_m 		= self->r_gal_getdata(fid, 'CONF_M')
+	conf_n 		= self->r_gal_getdata(fid, 'CONF_N')
 
-	did	= H5D_OPEN(fid, 'ID')
-	ID 	= H5D_READ(did)
-	H5D_CLOSE, did
+	;;-----
+	;; LOAD COLUMN
+	;;-----
+	gprop		= settings.column_list;[settings.column_list, settings.gal_prop]
 
+	FOR i=0L, N_ELEMENTS(settings.gal_prop)-1L DO BEGIN
+
+		IF settings.gal_prop(i) EQ 'sfr' THEN settings.gal_prop(i) = 'SFR'
+		IF settings.gal_prop(i) EQ 'SFR' THEN gprop	= [gprop, settings.gal_prop(i)]
+
+		IF settings.gal_prop(i) EQ 'abmag' THEN settings.gal_prop(i) = 'ABmag'
+		IF settings.gal_prop(i) EQ 'ABmag' THEN $
+			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
+				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
+		
+
+		IF settings.gal_prop(i) EQ 'sb' THEN settings.gal_prop(i) = 'SB'
+		IF settings.gal_prop(i) EQ 'SB' THEN $
+			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
+				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
+		
+	ENDFOR
+
+
+	;;-----
+	;; Initial cut (Not implemented Yet)
+	;;-----
 	IF id0 LT 0L THEN BEGIN 
-		IF KEYWORD_SET(masscut) THEN BEGIN
-			IF horg EQ 'g' THEN $
-				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
-			IF horg EQ 'h' THEN $
-				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
-
-			IF nn EQ 0L THEN BEGIN
-				PRINT, '%123123-----'
-				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
-				PRINT, '	(CONVERT TO READING ALL GALS'
-
-				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
-			ENDIF
-			n_gal	= nn
-		ENDIF ELSE BEGIN
+;		IF KEYWORD_SET(masscut) THEN BEGIN
+;			IF horg EQ 'g' THEN $
+;				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
+;			IF horg EQ 'h' THEN $
+;				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
+;
+;			IF nn EQ 0L THEN BEGIN
+;				PRINT, '%123123-----'
+;				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
+;				PRINT, '	(CONVERT TO READING ALL GALS'
+;
+;				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
+;			ENDIF
+;			n_gal	= nn
+;		ENDIF ELSE BEGIN
 			mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
 			n_gal	= nn
-		ENDELSE
+;		ENDELSE
 	ENDIF ELSE BEGIN
 		mcut	= WHERE(ID EQ id0, nn)
 		n_gal	= nn
@@ -181,32 +205,9 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 		tmpstr	+= Gprop(j) + ':t'+ Gprop(j) + ', '
 	ENDFOR
 
-	did	= H5D_OPEN(fid, 'ID_000001/Domain_List')
-	dlist	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'CONF_R')
-	conf_r	= H5D_READ(did)
-	H5D_CLOSE, did
-
+	dlist 	= self->r_gal_getdata(fid, 'ID_000001/Domain_List')
 	tmpstr	+= 'rate:1.0d, Domain_List:dlist, Aexp:1.0d, CONF_R:CONF_R'
 	n_mpi	= N_ELEMENTS(dlist)
-
-	did	= H5D_OPEN(fid, 'Flux_List')
-	flux_list	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'MAG_R')
-	mag_r	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'SFR_R')
-	sfr_r	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'SFR_T')
-	sfr_t	= H5D_READ(did)
-	H5D_CLOSE, did
 
 	tmpstr	+= ', isclump:-1L, Flux_List:flux_list, '
 	tmpstr	+= 'MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
@@ -229,30 +230,18 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 			H5D_CLOSE, did
 		ENDFOR
 
-		did	= H5D_OPEN(fid, idstr + '/isclump')
-		GP(i).isclump	= H5D_READ(did)
-		H5D_CLOSE, did
+		
+		GP(i).isclump	= self->r_gal_getdata(fid, idstr + '/isclump')
+		GP(i).Domain_list 	= self->r_gal_getdata(fid, idstr + '/Domain_List')
+		GP(i).aexp 		= self->r_gal_getdata(fid, idstr + '/Aexp')
+		GP(i).snapnum 	= snap0
+		GP(i).redsh 	= 1./GP(i).aexp - 1.d		
 
-
-		did	= H5D_open(fid, 'Flux_List')
-		GP(i).flux_list	= H5D_READ(did)
-		H5D_close, did
-
-		did	= H5D_OPEN(fid, idstr + '/Domain_List')
-		GP(i).Domain_list	= H5D_READ(did)
-		H5D_CLOSE, did
-
-		did	= H5D_OPEN(fid, idstr + '/rate')
-		GP(i).rate	= H5D_READ(did)
-		H5D_CLOSE, did
-
-		did	= H5D_open(fid, idstr + '/Aexp')
-		GP(i).aexp	= H5D_READ(did)
-		H5D_close, did
-
-		GP(i).snapnum	= snap0
-		GP(i).redsh 	= 1./GP(i).aexp - 1.d
+		;did	= H5D_OPEN(fid, idstr + '/rate')
+		;GP(i).rate	= H5D_READ(did)
+		;H5D_CLOSE, did
 	ENDFOR
+
 	H5F_CLOSE, fid
 	RETURN, GP
 END
@@ -1137,6 +1126,8 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 	;;	mp in Msun
 	;; 	ap in Gyr
 	;;  zp in Zsun
+	;;
+	;;	result, Luminosity of ptcls in Lsun
 	;;-----
 	tbl_sdss 	= self->t_miles_sdss_load()
 	tbl_galex 	= self->t_miles_galex_load()
@@ -1196,6 +1187,8 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 
 		lu 	= 1.d/ml * mp ;; in Lsun
 
+
+
 		CASE band(i) OF
 			'u'		: flux.u 	= lu
 			'g'		: flux.g 	= lu
@@ -1212,20 +1205,52 @@ END
 
 FUNCTION veluga::g_mag, lum, band
 
-	
+	;;-----
+	;; based on the MILES catalog with assuming that L/Lsun given in MILES uses Lsun in each band not a bolometric value
+	;;-----
+
 	FOR i=0L, N_ELEMENTS(band)-1L DO BEGIN
 		CASE band(i) OF
-			'u'		: mag 	= 6.55 - 2.5 * ALOG10(TOTAL(lum))
-			'g'		: mag 	= 5.12 - 2.5 * ALOG10(TOTAL(lum))
-			'r'		: mag 	= 4.68 - 2.5 * ALOG10(TOTAL(lum))
-			'i'		: mag 	= 4.57 - 2.5 * ALOG10(TOTAL(lum))
-			'z'		: mag 	= 4.54 - 2.5 * ALOG10(TOTAL(lum))
-			'nuv'	: mag 	= 10.18 - 2.5 * ALOG10(TOTAL(lum))
-			'NUV'	: mag 	= 10.18 - 2.5 * ALOG10(TOTAL(lum))
+			'u'		: magsun = 6.55
+			'g'		: magsun = 5.12
+			'r'		: magsun = 4.68
+			'i'		: magsun = 4.57
+			'z'		: magsun = 4.54
+			'nuv'	: magsun = 10.18
+			'NUV'	: magsun = 10.18
 		ENDCASE
+
+		mag 	= magsun - 2.5 * ALOG10(TOTAL(lum))
 	ENDFOR
 
 	RETURN, mag
+END
+
+FUNCTION veluga::g_sbf, lum, size, band
+
+	;;-----
+	;; L_sun in each band = L0 * 10^(-M / 2.5) where L0 is 3.0128e28
+	;;
+	;;	lum in Lsun
+	;;	size in kpc
+	;;-----
+
+	FOR i=0L, N_ELEMENTS(band)-1L DO BEGIN
+		CASE band(i) OF
+			'u'		: magsun = 6.55
+			'g'		: magsun = 5.12
+			'r'		: magsun = 4.68
+			'i'		: magsun = 4.57
+			'z'		: magsun = 4.54
+			'nuv'	: magsun = 10.18
+			'NUV'	: magsun = 10.18
+		ENDCASE
+
+		sbf_in_physical 	= TOTAL(lum) / (size*1d3)^2 	;; [Lsun / pc^2]
+		sbf 	= magsun + 21.572 - 2.5d * ALOG10(sbf_in_physical)
+	ENDFOR
+
+	RETURN, sbf
 END
 
 PRO veluga::g_potential, cell, part, $

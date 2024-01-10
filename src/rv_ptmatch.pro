@@ -8,8 +8,8 @@ dir_data	= runstat.dir
 IF run EQ 0L THEN RETURN, PTR_NEW({p_pos:-1, p_vel:-1, p_age:-1, p_met:-1, p_mass:-1, $
 	dom_list:-1, rate:-1, a_exp:-1},/no_copy)
 IF run EQ 1L THEN BEGIN
-	IF STRLEN(FILE_SEARCH(dir_data + 'rv_ptmatch.sav')) GE 5L THEN BEGIN
-		RESTORE, dir_data + 'rv_ptmatch.sav'
+	IF STRLEN(FILE_SEARCH(dir_data + '/rv_ptmatch.sav')) GE 5L THEN BEGIN
+		RESTORE, dir_data + '/rv_ptmatch.sav'
 		RETURN, PTR_NEW(output,/no_copy)
 	ENDIF ELSE BEGIN
 		run	= 2L
@@ -201,7 +201,7 @@ IF run EQ 2L THEN BEGIN
 		'dom_list', dom_list, 'rate', rate, $
 		'a_exp', siminfo.aexp)
 
-	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + 'rv_ptmatch.sav', output
+	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + '/rv_ptmatch.sav', output
 	RETURN, PTR_NEW(output,/no_copy)
 ENDIF
 END
