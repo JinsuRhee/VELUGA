@@ -156,8 +156,11 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
 				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
 		
+		IF settings.gal_prop(i) EQ 'conf' THEN settings.gal_prop(i) = 'CONF'
+		IF settings.gal_prop(i) EQ 'confrac' THEN settings.gal_prop(i) = 'CONF'
+		IF settings.gal_prop(i) EQ 'CONF' THEN $
+			gprop 	= [gprop, 'ConFrac_M', 'ConFrac_N']
 	ENDFOR
-
 
 	;;-----
 	;; Initial cut (Not implemented Yet)
@@ -206,11 +209,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	ENDFOR
 
 	dlist 	= self->r_gal_getdata(fid, 'ID_000001/Domain_List')
-	tmpstr	+= 'rate:1.0d, Domain_List:dlist, Aexp:1.0d, CONF_R:CONF_R'
+	tmpstr	+= 'isclump:-1L, Aexp:1.0d, Domain_List:dlist,  '
 	n_mpi	= N_ELEMENTS(dlist)
 
-	tmpstr	+= ', isclump:-1L, Flux_List:flux_list, '
-	tmpstr	+= 'MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
+	tmpstr	+= 'flux_List:flux_list, CONF_R:CONF_R, MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
 
 	void	= EXECUTE(tmpstr)
 	GP	= REPLICATE(GP, n_gal)

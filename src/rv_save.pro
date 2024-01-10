@@ -33,7 +33,9 @@ IF run EQ 0L THEN RETURN
 	;;		Mass: in Solar mass
 
 	ngal	= N_ELEMENTS((*runstat.rv_raw).id)
-	
+	nsfr 	= N_ELEMENTS(settings.SFR_R)
+	nmpi 	= settings.ndomain
+	nconf 	= N_ELEMENTS(settings.CONF_R)
 	;;-----
 	;; Open HDF5
 	;;-----
@@ -93,7 +95,7 @@ IF run EQ 0L THEN RETURN
 		bprop 	= *runstat.rv_bprop
 
 		sfr = -1.d
-		IF N_ELEMENTS(bprop.sfr) GE 2L THEN sfr = bprop.sfr
+		IF N_ELEMENTS(bprop.sfr) GE 2L THEN sfr = REFORM(bprop.sfr(i,*), nsfr)
 		simple_write_hdf5, sfr, gpstr + '/G_SFR', fid
 
 		
@@ -145,10 +147,11 @@ IF run EQ 0L THEN RETURN
 		;simple_write_hdf5, mz,  gpstr + '/G_SB_z', fid
 
 		cm = -1.d & cn = -1.d
-		IF N_ELEMENTS(bprop.confrac_m) GE 2L THEN cm = bprop.confrac_m(i).aper
-		IF N_ELEMENTS(bprop.confrac_n) GE 2L THEN cn = bprop.confrac_n(i).aper
+		IF N_ELEMENTS(bprop.confrac_m) GE 2L THEN cm = REFORM(bprop.confrac_m(i).aper, nconf)
+		IF N_ELEMENTS(bprop.confrac_n) GE 2L THEN cn = REFORM(bprop.confrac_n(i).aper, nconf)
 		simple_write_hdf5, cm, gpstr + '/G_ConFrac_M', fid
 		simple_write_hdf5, cn, gpstr + '/G_ConFrac_N', fid
+		
 
 		isclump = -1L
 		IF N_ELEMENTS(bprop.isclump) GE 2L THEN isclump = bprop.isclump(i)
@@ -167,7 +170,7 @@ IF run EQ 0L THEN RETURN
 
 		dom_list = -1L
 		IF N_ELEMENTS((*runstat.rv_ptmatch).dom_list) GE 2L THEN $
-			dom_list = (*runstat.rv_ptmatch).dom_list(i,*)
+			dom_list = REFORM((*runstat.rv_ptmatch).dom_list(i,*), nmpi)
 		simple_write_hdf5, dom_list, idstr + '/Domain_List', fid
 
 	ENDFOR

@@ -142,7 +142,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 		;;-----
 		veluga->ppout2, '		snapshot ' + STRING(i,format='(I4.4)') + ' is done'
 		veluga->ppout2, ' '
-		veluga->ppout2, '	Total Wall clock time : ' + STRING(runstat(ind).elt(0), format='(F9.4)')
+		veluga->ppout2, '	Total Wall clock time [s]: ' + STRING(runstat(ind).elt(0), format='(F9.4)')
 		veluga->ppout2, ' '
 		
 		ind ++
