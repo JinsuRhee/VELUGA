@@ -3,9 +3,10 @@ FUNCTION veluga::init, fname, num_thread=num_thread
 	IF ~KEYWORD_SET(num_thread) THEN num_thread = 1L
 
 	self.header	= PTR_NEW(/allocate)
-	self.rdheader, fname
 	self.num_thread	= num_thread
 
+
+	self.rdheader, fname
 	ptr 	= REPLICATE({tree:PTR_NEW(), key:PTR_NEW(), stat:-2L},2)
 	self.tree 	= PTR_NEW(ptr)
 	
@@ -29,8 +30,9 @@ PRO veluga::rdheader, fname
 
 	FINDPRO, 'veluga__define', dirlist=dirlist, /noprint
 	
-	settings 	= {header:'^^', dir_lib:dirlist(0), $
-		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' '}
+	settings 	= {header:'^^', dir_lib:dirlist(0), num_thread:1L, $
+		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' ', $
+		pp_msg_i:'%123123----- VELUGA (Post processing) -----', pp_msg_f:'%123123----------', pp_msg_0:' '}
 
 	
 	OPENR, 10, fname
@@ -50,6 +52,7 @@ PRO veluga::rdheader, fname
 		void	= EXECUTE(v2)
 	ENDFOR
 	CLOSE, 10
+	settings.num_thread	= self.num_thread
 
 	(*self.header)	= settings
 END
@@ -70,9 +73,32 @@ PRO veluga::errorout, str
 	PRINT, settings.erg_msg_f
 	RETURN
 END
+
+PRO veluga::ppout, str
+	settings 	= self->getheader()
+	PRINT, settings.pp_msg_i
+	PRINT, settings.pp_msg_0
+	PRINT, str
+	PRINT, settings.pp_msg_0
+	PRINT, settings.pp_msg_f
+	RETURN
+END
+
+PRO veluga::ppout2, str
+	settings 	= self->getheader()
+	PRINT, '		', str
+	RETURN
+END
+
 ;;-----
 ;; READ ROUTINE
 ;;-----
+FUNCTION veluga::r_gal_getdata, fid, str
+	did 	= H5D_OPEN(fid, str)
+	dumarr 	= H5D_READ(did)
+	H5D_CLOSE, did
+	RETURN, dumarr
+END
 FUNCTION veluga::r_gal, snap0, id0, horg=horg
 
 	;;-----
@@ -81,17 +107,6 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	IF ~KEYWORD_SET(horg) THEN horg = 'g'
 	settings	= self.getheader()
 	dir 		= settings.dir_catalog
-
-	;;-----
-	;; LOAD COLUMN
-	;;-----
-	gprop		= [settings.column_list, settings.gal_prop]
-
-	FOR i=0L, N_ELEMENTS(Gprop)-1L DO BEGIN
-		IF Gprop(i) EQ 'sfr' THEN Gprop(i) = 'SFR'
-		IF Gprop(i) EQ 'ABMAG' OR $
-			Gprop(i) EQ 'abmag' THEN Gprop(i) = 'ABmag'
-	ENDFOR
 
 	IF horg EQ 'g' THEN $
 		fname = dir + 'Galaxy/VR_Galaxy/snap_' + STRING(snap0,format='(I4.4)') + '.hdf5'
@@ -104,39 +119,71 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	fid	= H5F_OPEN(fname)
 
 	;;-----
-	;; ID AND MASS
+	;; READ OVERALL INFO FIRST
 	;;-----
-	did	= H5D_OPEN(fid, 'Mass_tot')
-	mass_tot 	= H5D_READ(did)
-	H5D_CLOSE, did
+	flux_list 	= self->r_gal_getdata(fid, 'Flux_List')
+	sfr_r 		= self->r_gal_getdata(fid, 'SFR_R')
+	sfr_t 		= self->r_gal_getdata(fid, 'SFR_T')
+	mag_r 		= self->r_gal_getdata(fid, 'MAG_R')
+	conf_r 		= self->r_gal_getdata(fid, 'CONF_R')
 
-	did	= H5D_OPEN(fid, 'Mvir')
-	mvir 	= H5D_READ(did)
-	H5D_CLOSE, did
+	mass_tot 	= self->r_gal_getdata(fid, 'Mass_tot')
+	r_halfmass	= self->r_gal_getdata(fid, 'R_HalfMass')
+	mvir 		= self->r_gal_getdata(fid, 'Mvir')
+	rvir 		= self->r_gal_getdata(fid, 'Rvir')
+	ID 			= self->r_gal_getdata(fid, 'ID')
+	conf_m 		= self->r_gal_getdata(fid, 'CONF_M')
+	conf_n 		= self->r_gal_getdata(fid, 'CONF_N')
 
-	did	= H5D_OPEN(fid, 'ID')
-	ID 	= H5D_READ(did)
-	H5D_CLOSE, did
+	;;-----
+	;; LOAD COLUMN
+	;;-----
+	gprop		= settings.column_list;[settings.column_list, settings.gal_prop]
 
+	FOR i=0L, N_ELEMENTS(settings.gal_prop)-1L DO BEGIN
+
+		IF settings.gal_prop(i) EQ 'sfr' THEN settings.gal_prop(i) = 'SFR'
+		IF settings.gal_prop(i) EQ 'SFR' THEN gprop	= [gprop, settings.gal_prop(i)]
+
+		IF settings.gal_prop(i) EQ 'abmag' THEN settings.gal_prop(i) = 'ABmag'
+		IF settings.gal_prop(i) EQ 'ABmag' THEN $
+			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
+				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
+		
+
+		IF settings.gal_prop(i) EQ 'sb' THEN settings.gal_prop(i) = 'SB'
+		IF settings.gal_prop(i) EQ 'SB' THEN $
+			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
+				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
+		
+		IF settings.gal_prop(i) EQ 'conf' THEN settings.gal_prop(i) = 'CONF'
+		IF settings.gal_prop(i) EQ 'confrac' THEN settings.gal_prop(i) = 'CONF'
+		IF settings.gal_prop(i) EQ 'CONF' THEN $
+			gprop 	= [gprop, 'ConFrac_M', 'ConFrac_N']
+	ENDFOR
+
+	;;-----
+	;; Initial cut (Not implemented Yet)
+	;;-----
 	IF id0 LT 0L THEN BEGIN 
-		IF KEYWORD_SET(masscut) THEN BEGIN
-			IF horg EQ 'g' THEN $
-				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
-			IF horg EQ 'h' THEN $
-				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
-
-			IF nn EQ 0L THEN BEGIN
-				PRINT, '%123123-----'
-				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
-				PRINT, '	(CONVERT TO READING ALL GALS'
-
-				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
-			ENDIF
-			n_gal	= nn
-		ENDIF ELSE BEGIN
+;		IF KEYWORD_SET(masscut) THEN BEGIN
+;			IF horg EQ 'g' THEN $
+;				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
+;			IF horg EQ 'h' THEN $
+;				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
+;
+;			IF nn EQ 0L THEN BEGIN
+;				PRINT, '%123123-----'
+;				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
+;				PRINT, '	(CONVERT TO READING ALL GALS'
+;
+;				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
+;			ENDIF
+;			n_gal	= nn
+;		ENDIF ELSE BEGIN
 			mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
 			n_gal	= nn
-		ENDELSE
+;		ENDELSE
 	ENDIF ELSE BEGIN
 		mcut	= WHERE(ID EQ id0, nn)
 		n_gal	= nn
@@ -161,35 +208,11 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 		tmpstr	+= Gprop(j) + ':t'+ Gprop(j) + ', '
 	ENDFOR
 
-	did	= H5D_OPEN(fid, 'ID_000001/Domain_List')
-	dlist	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'CONF_R')
-	conf_r	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	tmpstr	+= 'rate:1.0d, Domain_List:dlist, Aexp:1.0d, CONF_R:CONF_R'
+	dlist 	= self->r_gal_getdata(fid, 'ID_000001/Domain_List')
+	tmpstr	+= 'isclump:-1L, Aexp:1.0d, Domain_List:dlist,  '
 	n_mpi	= N_ELEMENTS(dlist)
 
-	did	= H5D_OPEN(fid, 'Flux_List')
-	flux_list	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'MAG_R')
-	mag_r	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'SFR_R')
-	sfr_r	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	did	= H5D_OPEN(fid, 'SFR_T')
-	sfr_t	= H5D_READ(did)
-	H5D_CLOSE, did
-
-	tmpstr	+= ', isclump:-1L, Flux_List:flux_list, '
-	tmpstr	+= 'MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
+	tmpstr	+= 'flux_List:flux_list, CONF_R:CONF_R, MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
 
 	void	= EXECUTE(tmpstr)
 	GP	= REPLICATE(GP, n_gal)
@@ -209,30 +232,18 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 			H5D_CLOSE, did
 		ENDFOR
 
-		did	= H5D_OPEN(fid, idstr + '/isclump')
-		GP(i).isclump	= H5D_READ(did)
-		H5D_CLOSE, did
+		
+		GP(i).isclump	= self->r_gal_getdata(fid, idstr + '/isclump')
+		GP(i).Domain_list 	= self->r_gal_getdata(fid, idstr + '/Domain_List')
+		GP(i).aexp 		= self->r_gal_getdata(fid, idstr + '/Aexp')
+		GP(i).snapnum 	= snap0
+		GP(i).redsh 	= 1./GP(i).aexp - 1.d		
 
-
-		did	= H5D_open(fid, 'Flux_List')
-		GP(i).flux_list	= H5D_READ(did)
-		H5D_close, did
-
-		did	= H5D_OPEN(fid, idstr + '/Domain_List')
-		GP(i).Domain_list	= H5D_READ(did)
-		H5D_CLOSE, did
-
-		did	= H5D_OPEN(fid, idstr + '/rate')
-		GP(i).rate	= H5D_READ(did)
-		H5D_CLOSE, did
-
-		did	= H5D_open(fid, idstr + '/Aexp')
-		GP(i).aexp	= H5D_READ(did)
-		H5D_close, did
-
-		GP(i).snapnum	= snap0
-		GP(i).redsh 	= 1./GP(i).aexp - 1.d
+		;did	= H5D_OPEN(fid, idstr + '/rate')
+		;GP(i).rate	= H5D_READ(did)
+		;H5D_CLOSE, did
 	ENDFOR
+
 	H5F_CLOSE, fid
 	RETURN, GP
 END
@@ -258,7 +269,7 @@ FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
 	dmp_mass 	= 1./(settings.neff*1.d)^3 * (info.omega_M - info.omega_b) / info.omega_m
 	pinfo	= DBLARR(n_ptcl,9) -  1.0d8
 
-	ftr_name 	= settings.dir_lib + 'fortran/get_ptcl.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/get_ptcl.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) = n_ptcl
 		larr(1) = N_ELEMENTS(dom_list)
@@ -473,18 +484,172 @@ FUNCTION veluga::g_cdist, zarr
 
 	RETURN, cdist
 END
+
+PRO veluga::g_makearr, array, input, index, unitsize=unitsize, type=type
+	IF ~KEYWORD_SET(unitsize) THEN unitsize = 10000L
+	IF ~KEYWORD_SET(type) THEN type = 'F'
+
+	IF type NE 'L' AND type NE 'D' AND type NE 'F' AND type NE 'L64' THEN BEGIN
+		PRINT, '***** CURRENT TYPE IS NOT IMPLEMENTED'
+		STOP
+	ENDIF ELSE BEGIN
+		IF type EQ 'L' THEN dumarr = 'lonarr'
+		IF type EQ 'D' THEN dumarr = 'dblarr'
+		IF type EQ 'F' THEN dumarr = 'fltarr'
+		IF type EQ 'L64' THEN dumarr = 'lon64arr'
+	ENDELSE
+
+	;;-----
+	IF SIZE(input, /n_dimension) EQ 0L THEN input = [input]
+	IF SIZE(input, /n_dimension) EQ 1L THEN n_dim = 1L
+	IF SIZE(input, /n_dimension) GE 2L THEN n_dim = N_ELEMENTS(input(0,*))
+
+	;;-----
+	IF(n_dim EQ 1L) THEN n1 = N_ELEMENTS(input) 
+	IF(n_dim GE 2L) THEN n1 = N_ELEMENTS(input(*,0)) 
+
+	IF index LT 0L THEN BEGIN
+		IF n_dim EQ 1L THEN BEGIN
+			void	= EXECUTE('array = ' + STRTRIM(dumarr,2) + '(' + STRTRIM(unitsize,2) +  ')')
+		ENDIF ELSE BEGIN
+			void	= EXECUTE('array = ' + STRTRIM(dumarr,2) + '(' + $
+				STRTRIM(unitsize,2) + ',' + STRTRIM(n_dim,2) + ')')
+		ENDELSE
+		nn = -1L
+		n0	= 0L
+		n1	= n1-1L
+	ENDIF ELSE BEGIN
+		nn = index
+		n0	= nn
+		n1	= nn + n1 -1L
+	ENDELSE
+
+	;;-----
+	IF n_dim EQ 1L THEN n_size = N_ELEMENTS(array)
+	IF n_dim GE 2L THEN n_size = N_ELEMENTS(array(*,0))
+
+	;n0	= nn + 1L
+	;n1	= nn + n1
+	;n0	= nn
+	;n1	= nn + n1 - 1L
+
+	;;-----
+	IF n1 GE n_size - 1L THEN BEGIN
+		REPEAT BEGIN
+			IF n_dim EQ 1L THEN void = EXECUTE('array = [array, ' + $
+				STRTRIM(dumarr,2) + '(' + STRTRIM(unitsize,2)+ ')]')
+	        	IF n_dim GE 2L THEN void = EXECUTE('array = [array, ' + $
+				STRTRIM(dumarr,2) + '(' + STRTRIM(unitsize,2) + ',' + $
+			        STRTRIM(n_dim,2) + ')]')
+	
+			IF n_dim EQ 1L THEN n_size = N_ELEMENTS(array)
+			IF n_dim GE 2L THEN n_size = N_ELEMENTS(array(*,0))
+		ENDREP UNTIL n1 LT n_size
+	ENDIF
+
+	IF n_dim EQ 1L THEN array(n0>0L:n1) = input
+	IF n_dim GE 2L THEN array(n0>0L:n1,*) = input
+	
+	index = n1 + 1L
+END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
 ;;-----
 FUNCTION veluga::g_info, snap0
+
+	;;-----
+	;; Read info file
+	;;	employed from rd_info.pro
+	;;-----
 	str 	= STRING(snap0, format='(I5.5)')
 	settings 	= self.getheader()
-	rd_info, info, file=settings.dir_raw + 'output_' + str + '/info_' + str + '.txt'
+
+
+  	my_narr		= LONARR(6)
+	my_narr(0:5)  = 0L
+	my_rarr       = DBLARR(11)
+	my_rarr(0:10) = 0.
+  	
+	dataname      = string("",format='(a13)')
+
+	file 	= settings.dir_raw + '/output_' + str + '/info_' + str + '.txt'
+    OPENR,2,file
+  
+	value = 0L
+	FOR il = 0,5 DO BEGIN
+		READF, 2, dataname, value,format='(a13,I11)'
+		my_narr(il) = value
+	ENDFOR
+
+	data="alors je sais vraiment pas qupi mettre pour que ca marche"
+
+	READF, 2, data, format='(a50)'
+
+	value =0d0
+	FOR il = 0,10 DO BEGIN
+		READF, 2, dataname, value, format='(a13,E23.15)'
+		my_rarr(il) = value
+	ENDFOR
+	CLOSE, 2
+
+	;; unit in cgs
+	kpc     = 3.08568025e21
+	twopi   = 6.2831853d0
+	hplanck = 6.6262000d-27
+	eV      = 1.6022000d-12
+	kB      = 1.3806200d-16
+	clight  = 2.9979250d+10
+	Gyr     = 3.1536000d+16
+	X       = 0.76
+	Y       = 0.24 
+	rhoc    = 1.8800000d-29
+	mH      = 1.6600000d-24
+	mu_mol  = 1.2195d0
+	G       = 6.67259e-8
+	m_sun   = 1.98892e33
+
+	cgs 	= {kpc:kpc, hplanck:hplanck, eV:eV, kB:kB, clight:clight, Gyr:Gyr, mH:mH, G:G, m_sun:m_sun}
+
+	scale_l    = my_rarr(8)
+	scale_d    = my_rarr(9)
+	scale_t    = my_rarr(10)
+
+	;; scale_m convert mass in user units into g
+	scale_m    = scale_d*(DOUBLE(scale_l))^3
+	;; scale_v convert velocity in user units into cm/s
+	scale_v    = scale_l / scale_t
+	;; scale_T2 converts (P/rho) in user unit into (T/mu) in Kelvin
+	scale_T2   = mH/kB * scale_v^2.
+	scale_nH   = X/mH * scale_d
+	;; scale covert mettalicty into solar metallicity Z_sol = 0.02
+	scale_Z    = 1./0.02 
+	scale_flux = scale_v*scale_d*kpc*kpc*Gyr/m_sun
+  
+	info={cgs:cgs, boxtokpc:my_rarr(0)*scale_l/kpc,tGyr:my_rarr(1)*scale_t/Gyr,boxlen:my_rarr(0),levmin:my_narr(2),levmax:my_narr(3),unit_l:scale_l,unit_d:scale_d,unit_t:scale_t,unit_m:scale_m,unit_v:scale_v,unit_nH:scale_nH,unit_T2:scale_T2,unit_Z:scale_Z,kms:scale_v/1d5,unit_flux:scale_d*scale_v*(1e-9*Gyr)*(kpc)*(kpc)/m_sun,aexp:my_rarr(2), H0:my_rarr(3), omega_m:my_rarr(4), omega_l:my_rarr(5), omega_k:my_rarr(6), omega_b:my_rarr(7), ncpu:my_narr(0), ndim:my_narr(1)}
+  
+	;;-----
+	;; Read Hilbert Indices
+	;;-----
+	ncpu	= my_narr(0)
+	hindex	= DBLARR(ncpu,2)
+	OPENR, 2, file
+	str	= ' '
+	FOR i=0L, 20L DO READF, 2, str
+	FOR i=0L, ncpu-1L DO BEGIN
+ 	aa 	= DBLARR(3)
+ 	READF, 2, aa
+ 	hindex(i,0) = aa(1)
+ 	hindex(i,1) = aa(2)
+	ENDFOR
+	CLOSE, 2
+	info	= CREATE_STRUCT(info,'hindex', hindex)
+
+	;rd_info, info, file=settings.dir_raw + 'output_' + str + '/info_' + str + '.txt'
 	RETURN, info
 END
 
-FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
+FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	;;-----
 	;; Return domain list
 	;; 		positions are given in kpc unit
@@ -496,6 +661,8 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 	n_gal 	= N_ELEMENTS(xc2)
 	n_mpi 	= info.ncpu
 
+	IF N_ELEMENTS(xc2) NE N_ELEMENTS(rr2) THEN rr2 = xc2*0.d + MAX(rr2)
+
 	xc 	= DOUBLE(xc2)*3.086e21 / info.unit_l
 	yc 	= DOUBLE(yc2)*3.086e21 / info.unit_l
 	zc 	= DOUBLE(zc2)*3.086e21 / info.unit_l
@@ -503,7 +670,7 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 
 	dom_list 	= LONARR(n_gal, n_mpi)
 
-	ftr_name 	= settings.dir_lib + 'fortran/find_domain.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/find_domain.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) 	= n_gal
 		larr(1) 	= n_mpi
@@ -514,10 +681,23 @@ FUNCTION veluga::g_domain, xc2, yc2, zc2, rr2, snap0
 	void 	= CALL_EXTERNAL(ftr_name, 'find_domain', $
 		xc, yc, zc, rr, info.hindex, info.levmax, dom_list, larr, darr)
 
-	cut 	= WHERE(dom_list GE 0L, ncut)
+	void 	= WHERE(dom_list GE 0L, ncut)
 
 	IF ncut GE 1L THEN BEGIN
-		RETURN, dom_list
+		dom_all 	= LONARR(n_gal*n_mpi)-1L
+		i0 	= 0L
+		FOR i=0L, n_gal-1L DO BEGIN
+			cut 		= WHERE(dom_list(i,*) GE 1L)
+			cut2 		= (ARRAY_INDICES(dom_list(i,*), cut))(1,*)
+			dom_list2	= self->g_unique(cut2) + 1L
+
+			i1 	= i0 + N_ELEMENTS(dom_list2)-1L
+			dom_all(i0:i1) 	= dom_list2
+			i0 	= i1 + 1L
+		ENDFOR
+		dom_all 	= self->g_unique(dom_all)
+		dom_all 	= dom_all(WHERE(dom_all GE 1L))
+		RETURN, dom_all
 	ENDIF ELSE BEGIN
 		self->errorout, '		g_domain: NO DOMAIN LEFT'
 		RETURN, 1L
@@ -535,8 +715,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	settings	= self->getheader()
 	num_thread = self.num_thread
 	IF ~KEYWORD_SET(dom_list) THEN BEGIN
-		dom_list 	= self->g_domain(xc2, yc2, zc2, rr2, snap0)
-		dom_list 	= WHERE(dom_list GE 1L) + 1L
+		dom_list 	= self->g_domain(snap0, xc2, yc2, zc2, rr2)
 	ENDIF
 
 	info 	= self->g_info(snap0)
@@ -549,7 +728,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	npart_tot 	= 0L
 	part_ind 	= LONARR(ncpu)
 
-	ftr_name 	= settings.dir_lib + 'fortran/jsrd_part_totnum.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/jsrd_part_totnum.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= ncpu
 		larr(2) = num_thread
@@ -575,7 +754,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;; READ
 	;;-----
 
-	ftr_name 	= settings.dir_lib + 'fortran/jsrd_part.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/jsrd_part.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= ncpu
 		larr(2)	= num_thread
@@ -655,8 +834,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	settings	= self->getheader()
 	num_thread = self.num_thread
 	IF ~KEYWORD_SET(dom_list) THEN BEGIN
-		dom_list 	= self->g_domain(xc2, yc2, zc2, rr2, snap0)
-		dom_list 	= WHERE(dom_list GE 1L) + 1L
+		dom_list 	= self->g_domain(snap0, xc2, yc2, zc2, rr2)
 	ENDIF
 
 	info 	= self->g_info(snap0)
@@ -681,7 +859,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;;-----
 	;; MEMORY ALLOCATE
 	;;-----
-	ftr_name 	= settings.dir_lib + 'fortran/jsamr2cell_totnum.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/jsamr2cell_totnum.so'
 	larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) = ncpu
 		larr(2) = 1L;settings.num_thread
@@ -709,7 +887,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;;-----
 	;; READ CELL
 	;;-----
-	ftr_name	= settings.dir_lib + 'fortran/jsamr2cell.so'
+	ftr_name	= settings.dir_lib + 'src/fortran/jsamr2cell.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= ncpu;icpu
 		larr(2)	= self.num_thread
@@ -781,29 +959,28 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 END
 
 
-FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
+FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	;;-----
 	;; Compute contamination fractions
 	;;		positions are given in kpc unit
-	;;		aperture in R_eff unit
+	;;		aperture in kpc unit
+	;;			shuld be in a [N_gal, N_aper] format
 	;;-----
 
 	settings	= self->getheader()
 	num_thread 	= self.num_thread
 	
-	IF ~KEYWORD_SET(aperture) THEN aperture = [1.d]
-
 	n_gal 	= N_ELEMENTS(xc)
-	n_aper	= N_ELEMENTS(aperture)
+	n_aper	= N_ELEMENTS(aperture(0,*))
 
 	;;------
 	;; Get Domain
 	;;------
-	dom_list 	= self->g_domain(xc, yc, zc, rr*MAX(aperture), snap0)
+	rr 	= xc
+	FOR i=0L, n_gal-1L DO rr(i) = MAX(aperture(i,*))
 
-	cut 	= WHERE(dom_list GE 1L)
-	cut2 	= (ARRAY_INDICES(dom_list, cut))(1,*)
-	dom_all	= self->g_unique(cut2) + 1L
+	dom_all 	= self->g_domain(snap0, xc, yc, zc, rr)
+
 
 	;;-----
 	;; Read all ptcls
@@ -811,8 +988,12 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 	part 	= self->g_part(0.d, 0.d, 0.d, 0.d, snap0, dom_list=dom_all)
 
 	dm_ind 	= WHERE(part.family EQ 1L, nn_dm)
-	dm_xp 	= part.xp(dm_ind,*)
-	dm_mm 	= part.mp(dm_ind)
+	part 	= part(dm_ind)
+	xp 	= DBLARR(N_ELEMENTS(part),3)
+	xp(*,0)	= part.xx
+	xp(*,1)	= part.yy
+	xp(*,2)	= part.zz
+	mp 		= part.mp
 
 	;;-----
 	;; CFrac computation
@@ -822,14 +1003,16 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 	conf_n 	= DBLARR(n_gal, n_aper)
 	conf_m 	= DBLARR(n_gal, n_aper)
 
-	xc0 	= xc * 3.086d21/info.unit_l
-	yc0 	= yc * 3.086d21/info.unit_l
-	zc0 	= zc * 3.086d21/info.unit_l
-	rr0 	= rr * 3.086d21/info.unit_l
+	xc0 	= xc; * 3.086d21/info.unit_l
+	yc0 	= yc; * 3.086d21/info.unit_l
+	zc0 	= zc; * 3.086d21/info.unit_l
+	aperture= aperture; * 3.086d21/info.unit_l
+	;rr0 	= rr * 3.086d21/info.unit_l
 
 	dmp_mass 	= 1./(settings.neff*1.d)^3 * (info.omega_M - info.omega_b) / info.omega_m
+	dmp_mass 	*= (info.unit_m / info.cgs.m_sun)
 
-	ftr_name 	= settings.dir_lib + 'fortran/get_contam.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/get_contam.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) = n_gal
 		larr(1) = nn_dm
@@ -843,9 +1026,9 @@ FUNCTION veluga::g_cfrac, xc, yc, zc, rr, snap0, aperture=aperture
 		darr(0)	= dmp_mass
 
 	void 	= CALL_EXTERNAL(ftr_name, 'get_contam', $
-		larr, darr, settings.dir_raw, xc0, yc0, zc0, rr0, $
-		dm_xp, dm_mm, conf_n, conf_m, DOUBLE(aperture))
-	
+		larr, darr, settings.dir_raw, xc0, yc0, zc0, aperture, $
+		xp, mp, conf_n, conf_m)
+
 	RETURN, {N:conf_n, M:conf_m}
 END
 
@@ -874,7 +1057,7 @@ FUNCTION veluga::g_gyr, snap0, tconf
 	v1 	= DBLARR(n_part) - 1.0d8 
 	v2 	= DBLARR(n_part) - 1.0d8
 
-	ftr_name	= settings.dir_lib + 'fortran/prop_time.so'
+	ftr_name	= settings.dir_lib + 'src/fortran/prop_time.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= n_part
 		larr(1)	= self.num_thread
@@ -893,8 +1076,61 @@ FUNCTION veluga::g_gyr, snap0, tconf
 	RETURN, age
 END
 
+FUNCTION veluga::g_sfr, xx, yy, zz, age, mass, xc, yc, zc, aperture=aperture, timewindow=timewindow
+	;;-----
+	;; Compute SFR with given ptcls
+	;;	- xx, yy, and zz
+	;;		positions of ptcls in kpc unit (physical)
+	;;	- age, mass
+	;;		age of ptcls in Gyr
+	;;		mass of ptcls in Msun
+	;;	- xc, yc, and zc
+	;;		positions of the center
+	;;	- aperture
+	;;		aperture size in kpc unit
+	;;		if set to be negative, use all ptcls
+	;;	- timewindow
+	;;		timewindow for SFR mesurement in Gyr unit
+	;;-----
+
+
+	;; Default
+	IF ~KEYWORD_SET(aperture) THEN apreture = 10.d
+	IF ~KEYWORD_SET(timewindow) THEN timewindow = 0.1d
+	settings= self->getheader()
+
+	;; Allocate
+	n_part 	= N_ELEMENTS(xx)
+
+	ftr_name	= settings.dir_lib + 'src/fortran/prop_sfr.so'
+		larr = LONARR(20) & darr = DBLARR(20)
+		larr(0)	= 1L
+		larr(1)	= n_part
+		larr(2)	= self.num_thread
+
+		darr(0)	= aperture
+		darr(10)= timewindow
+
+		void	= CALL_EXTERNAL(ftr_name, 'prop_sfr', $
+			larr, darr, $
+			DOUBLE(xx), DOUBLE(yy), DOUBLE(zz), DOUBLE(age), DOUBLE(mass), $
+			DOUBLE(xc), DOUBLE(yc), DOUBLE(zc))
+
+	sfr = darr(19)
+	RETURN, sfr
+END
+
 FUNCTION veluga::g_luminosity, mp, ap, zp, band
 
+	;;-----
+	;; Get Luminosity of given ptcls
+	;;
+	;;	mp in Msun
+	;; 	ap in Gyr
+	;;  zp in Zsun
+	;;
+	;;	result, Luminosity of ptcls in Lsun
+	;;-----
 	tbl_sdss 	= self->t_miles_sdss_load()
 	tbl_galex 	= self->t_miles_galex_load()
 
@@ -914,6 +1150,8 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 			'z'		: BEGIN
 				ref_ml = tbl_sdss.z & ref_met = tbl_sdss.metal & ref_age = tbl_sdss.age & mag0 = 4.54 & END
 			'nuv'	: BEGIN
+				ref_ml = tbl_galex.nuv & ref_met = tbl_galex.metal & ref_age = tbl_galex.age & mag0 = 10.18 & END
+			'NUV'	: BEGIN
 				ref_ml = tbl_galex.nuv & ref_met = tbl_galex.metal & ref_age = tbl_galex.age & mag0 = 10.18 & END
 			ELSE: STOP
 		ENDCASE
@@ -951,6 +1189,8 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 
 		lu 	= 1.d/ml * mp ;; in Lsun
 
+
+
 		CASE band(i) OF
 			'u'		: flux.u 	= lu
 			'g'		: flux.g 	= lu
@@ -958,6 +1198,7 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 			'i'		: flux.i 	= lu
 			'z'		: flux.z 	= lu
 			'nuv'	: flux.nuv 	= lu
+			'NUV'	: flux.nuv 	= lu
 		ENDCASE
 	ENDFOR
 
@@ -966,19 +1207,52 @@ END
 
 FUNCTION veluga::g_mag, lum, band
 
-	
+	;;-----
+	;; based on the MILES catalog with assuming that L/Lsun given in MILES uses Lsun in each band not a bolometric value
+	;;-----
+
 	FOR i=0L, N_ELEMENTS(band)-1L DO BEGIN
 		CASE band(i) OF
-			'u'		: mag 	= 6.55 - 2.5 * ALOG10(TOTAL(lum))
-			'g'		: mag 	= 5.12 - 2.5 * ALOG10(TOTAL(lum))
-			'r'		: mag 	= 4.68 - 2.5 * ALOG10(TOTAL(lum))
-			'i'		: mag 	= 4.57 - 2.5 * ALOG10(TOTAL(lum))
-			'z'		: mag 	= 4.54 - 2.5 * ALOG10(TOTAL(lum))
-			'nuv'	: mag 	= 10.18 - 2.5 * ALOG10(TOTAL(lum))
+			'u'		: magsun = 6.55
+			'g'		: magsun = 5.12
+			'r'		: magsun = 4.68
+			'i'		: magsun = 4.57
+			'z'		: magsun = 4.54
+			'nuv'	: magsun = 10.18
+			'NUV'	: magsun = 10.18
 		ENDCASE
+
+		mag 	= magsun - 2.5 * ALOG10(TOTAL(lum))
 	ENDFOR
 
 	RETURN, mag
+END
+
+FUNCTION veluga::g_sbf, lum, size, band
+
+	;;-----
+	;; L_sun in each band = L0 * 10^(-M / 2.5) where L0 is 3.0128e28
+	;;
+	;;	lum in Lsun
+	;;	size in kpc
+	;;-----
+
+	FOR i=0L, N_ELEMENTS(band)-1L DO BEGIN
+		CASE band(i) OF
+			'u'		: magsun = 6.55
+			'g'		: magsun = 5.12
+			'r'		: magsun = 4.68
+			'i'		: magsun = 4.57
+			'z'		: magsun = 4.54
+			'nuv'	: magsun = 10.18
+			'NUV'	: magsun = 10.18
+		ENDCASE
+
+		sbf_in_physical 	= TOTAL(lum) / (size*1d3)^2 	;; [Lsun / pc^2]
+		sbf 	= magsun + 21.572 - 2.5d * ALOG10(sbf_in_physical)
+	ENDFOR
+
+	RETURN, sbf
 END
 
 PRO veluga::g_potential, cell, part, $
@@ -1041,7 +1315,7 @@ PRO veluga::g_potential, cell, part, $
 	Gconst 		*= (mtoKpc / kgtoMsun * 1d-6)	;; (km/s)^2 Kpc/Msun
 
 
-	ftr_name 	= settings.dir_lib + 'fortran/js_getpt_ft.so'
+	ftr_name 	= settings.dir_lib + 'src/fortran/js_getpt_ft.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0)	= N_ELEMENTS(mass)
 		larr(1) = 3L	;; dimension
@@ -1301,8 +1575,8 @@ PRO veluga::t_miles_galex
 	tbl.metal 	= (10.^metal)*0.02
 	tbl.nuv 	= nuv2
 
-	age_arr		= js_unique(tbl.age)
-	met_arr		= js_unique(tbl.metal)
+	age_arr		= self->g_unique(tbl.age)
+	met_arr		= self->g_unique(tbl.metal)
 
 	;; Make 2D TABLE
 

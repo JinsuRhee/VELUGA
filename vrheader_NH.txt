@@ -1,0 +1,39 @@
+##-----
+## Path Settings
+##-----
+dir_raw		= '/storage6/NewHorizon/snapshots/'
+#dir_catalog	= '/storage5/NewHorizon/VELOCIraptor/'
+dir_catalog	= '/storage6/jinsu/veluga/'
+#dir_lib		= '/storage5/jinsu/idl_lib/IDLlib/jinsu/vr_callftn/'
+
+##-----
+## Output-related settings
+##-----
+flux_list	= ['NUV', 'u', 'g', 'r', 'i', 'z']
+Mag_r		= [-1.0, 0.1, 1.0]
+SFR_t		= [0.01, 0.01, 0.01, 0.05, 0.05, 0.05, 0.10, 0.10, 0.10, 0.50, 0.50, 0.50, 1.00, 1.00, 1.00]
+SFR_r		= [-1.0, 0.10, 1.00, -1.0, 0.10, 1.00, -1.0, 0.10, 1.00, -1.0, 0.10, 1.00, -1.0, 0.10, 1.00]
+CONF_R		= [1.0, 5.0, 10.0]
+column_list     = ['ID', 'ID_mbp', 'hostHaloID', 'numSubStruct', 'Structuretype', 'Mvir', 'Mass_tot', 'Mass_FOF', 'Mass_200mean', 'Efrac', 'Mass_200crit', 'Rvir', 'R_size', 'R_200mean', 'R_200crit', 'R_HalfMass', 'R_HalfMass_200mean', 'R_HalfMass_200crit', 'Rmax', 'Xc', 'Yc', 'Zc', 'VXc', 'VYc', 'VZc', 'Lx', 'Ly', 'Lz', 'sigV', 'Vmax', 'npart']
+gal_prop	= ['SFR', 'ABmag', 'SB', 'CONF']
+
+##-----
+## RAMSES-related settings
+##-----
+idtype		= 'long'	;; 'long' or 'long64'
+famtype		= 'old'		;; 'old' or 'new'
+neff		= 4096L		;; for zoom-in simulation, starting level
+ndomain		= 4800L		;; Number of domains of a RAMSES output
+
+skiprd_domain	= -1L	;; skip reading domain in particle data
+skiprd_time 	= -1L	;; skip reading time in particle data
+skiprd_metal	= -1L	;; skip reading metal in particle data
+
+##-----
+## Post processing related
+##-----
+pp_snap	= [100L, 100L, 1L]	;; snapshot range [snap_i, snap_f, dsnap]
+pp_runtype 	= {load_catalog:1L, read_ptclid:1L, member_match:1L, compute_bulk:1L, save:2L};; 2 force run // 1 mild run // 0 skip
+
+pp_saveprocess	= 1L 		;; 0L no save // 1L save
+pp_clump_mfrac	= 0.5d		;; Mass fraction for identifying newly formed clumps

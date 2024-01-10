@@ -37,6 +37,13 @@ gcc -fopenmp -fPIC -mcmodel=large -c js_getpt_ft_c2f.c -o js_getpt_ft_c2f.o
 gcc -shared -fopenmp -mcmodel=large js_getpt_ft.o js_getpt_ft_c2f.o js_kdtree.o -o js_getpt_ft.so -lgfortran
 #gcc -shared -fopenmp -mcmodel=large js_getpt_ft.o js_getpt_ft_c2f.o -o js_getpt_ft.so -lgfortran
 
+gfortran -fopenmp -fPIC -mcmodel=large -fno-range-check -c rv_match.f90 -o rv_match.o
+gcc -fopenmp -fPIC -mcmodel=large -c rv_match_c2f.c -o rv_match_c2f.o
+gcc -shared -fopenmp rv_match.o rv_match_c2f.o -o rv_match.so -lgfortran
+
+gfortran -fopenmp -fPIC -c prop_sfr.f90 -o prop_sfr.o
+gcc -fopenmp -fPIC -c prop_sfr_c2f.c -o prop_sfr_c2f.o
+gcc -shared -fopenmp prop_sfr.o prop_sfr_c2f.o -o prop_sfr.so
 chmod 777 *.o *.so
 
 
