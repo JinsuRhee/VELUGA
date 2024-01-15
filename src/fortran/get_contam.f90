@@ -82,7 +82,6 @@
        !info%omp_tag  = -1
 
        root = js_kdtree_mktree(xp, mp, orgind, info)
-
        time(2)  = omp_get_wtime()
        !!-----
        !! MAIN LOOP
