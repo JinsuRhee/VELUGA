@@ -1172,11 +1172,15 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 			cut 	= WHERE(age_ind EQ -1L AND age_arr - ref_age(j) LT 0., ncut)
 			IF ncut GE 1L THEN age_ind(cut)	= j-1
 		ENDFOR
+		cut 	= WHERE(age_arr GT MAX(ref_age), ncut)
+		IF ncut GE 1L THEN age_ind(cut) = N_ELEMENTS(ref_age)-2L
 
 		FOR j=1L, N_ELEMENTS(ref_met)-1L DO BEGIN
 			cut 	= WHERE(met_ind EQ -1L AND met_arr - ref_met(j) LT 0., ncut)
 			IF ncut GE 1L THEN met_ind(cut)	= j-1
 		ENDFOR
+		cut 	= WHERE(met_arr GT MAX(met_age), ncut)
+		IF ncut GE 1L THEN met_ind(cut) = N_ELEMENTS(met_age)-2L
 
 		z00 	= ref_ml(age_ind, met_ind)
 		z01 	= ref_ml(age_ind, met_ind+1L)
