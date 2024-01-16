@@ -18,7 +18,7 @@ END
 FUNCTION veluga::allocate, nn, type=type
 
 	CASE type OF
-		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
+		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
 		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d}, nn)
 		ELSE: STOP
 	ENDCASE
@@ -30,7 +30,7 @@ PRO veluga::rdheader, fname
 
 	FINDPRO, 'veluga__define', dirlist=dirlist, /noprint
 	
-	settings 	= {header:'^^', dir_lib:dirlist(0), num_thread:1L, $
+	settings 	= {header:'^^', dir_lib:dirlist(0), num_thread:1L, sun_met:0.d, $
 		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' ', $
 		pp_msg_i:'%123123----- VELUGA (Post processing) -----', pp_msg_f:'%123123----------', pp_msg_0:' '}
 
@@ -53,6 +53,7 @@ PRO veluga::rdheader, fname
 	ENDFOR
 	CLOSE, 10
 	settings.num_thread	= self.num_thread
+	settings.sun_met	= 0.02d
 
 	(*self.header)	= settings
 END
@@ -623,7 +624,7 @@ FUNCTION veluga::g_info, snap0
 	scale_T2   = mH/kB * scale_v^2.
 	scale_nH   = X/mH * scale_d
 	;; scale covert mettalicty into solar metallicity Z_sol = 0.02
-	scale_Z    = 1./0.02 
+	scale_Z    = 1./settings.sun_met 
 	scale_flux = scale_v*scale_d*kpc*kpc*Gyr/m_sun
   
 	info={cgs:cgs, boxtokpc:my_rarr(0)*scale_l/kpc,tGyr:my_rarr(1)*scale_t/Gyr,boxlen:my_rarr(0),levmin:my_narr(2),levmax:my_narr(3),unit_l:scale_l,unit_d:scale_d,unit_t:scale_t,unit_m:scale_m,unit_v:scale_v,unit_nH:scale_nH,unit_T2:scale_T2,unit_Z:scale_Z,kms:scale_v/1d5,unit_flux:scale_d*scale_v*(1e-9*Gyr)*(kpc)*(kpc)/m_sun,aexp:my_rarr(2), H0:my_rarr(3), omega_m:my_rarr(4), omega_l:my_rarr(5), omega_k:my_rarr(6), omega_b:my_rarr(7), ncpu:my_narr(0), ndim:my_narr(1)}
@@ -1486,7 +1487,7 @@ PRO veluga::t_miles_sdss
 
 	tbl 	= REPLICATE({age:0.d, metal:0.d, mass:0.d, u:0.d, g:0.d, r:0.d, i:0.d, z:0.d}, N_ELEMENTS(metal))
 	tbl.age 	= age
-	tbl.metal 	= (10.^metal)*0.02
+	tbl.metal 	= (10.^metal)*settings.sun_met
 	tbl.u 		= u2
 	tbl.g 		= g2
 	tbl.r 		= r2
@@ -1572,7 +1573,7 @@ PRO veluga::t_miles_galex
 	tbl 	= REPLICATE({age:0.d, metal:0.d, mass:0.d, nuv:0.d}, N_ELEMENTS(metal))
 
 	tbl.age 	= age
-	tbl.metal 	= (10.^metal)*0.02
+	tbl.metal 	= (10.^metal)*settings.sun_met
 	tbl.nuv 	= nuv2
 
 	age_arr		= self->g_unique(tbl.age)
