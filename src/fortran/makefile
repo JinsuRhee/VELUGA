@@ -31,11 +31,9 @@ gfortran -fopenmp -fPIC -mcmodel=large -c jsamr2cell.f90 -o jsamr2cell.o
 gcc -fopenmp -fPIC -mcmodel=large -c jsamr2cell_c2f.c -o jsamr2cell_c2f.o
 gcc -shared -fopenmp -mcmodel=large jsamr2cell.o jsamr2cell_c2f.o -o jsamr2cell.so -lgfortran
 
-#gfortran -fopenmp -fPIC -mcmodel=large -c js_kdtree.f90 -o js_kdtree.o
 gfortran -fopenmp -fPIC -mcmodel=large -c js_getpt_ft.f90 -o js_getpt_ft.o
 gcc -fopenmp -fPIC -mcmodel=large -c js_getpt_ft_c2f.c -o js_getpt_ft_c2f.o
 gcc -shared -fopenmp -mcmodel=large js_getpt_ft.o js_getpt_ft_c2f.o js_kdtree.o -o js_getpt_ft.so -lgfortran
-#gcc -shared -fopenmp -mcmodel=large js_getpt_ft.o js_getpt_ft_c2f.o -o js_getpt_ft.so -lgfortran
 
 gfortran -fopenmp -fPIC -mcmodel=large -fno-range-check -c rv_match.f90 -o rv_match.o
 gcc -fopenmp -fPIC -mcmodel=large -c rv_match_c2f.c -o rv_match_c2f.o
