@@ -16,6 +16,10 @@ from scipy.io import FortranFile
 import scipy.integrate as integrate
 
 
+from src.fortran.get_ptcl_py import get_ptcl_py
+from src.fortran.find_domain_py import find_domain_py
+
+
 class veluga:
 
 	def __init__(self, header, num_thread=1):
@@ -76,12 +80,255 @@ class veluga:
 	def stat(self, array):
 		print('MIN = ', np.amin(array))
 		print('MAX = ', np.amax(array))
-		print('MED = ', np.median(array))
 		print('AVG = ', np.average(array))
+		print('MED = ', np.median(array))
+
+	def ramses_part_input(self, ramobj):
+
+		ramobj.n_thread = np.int32(self.num_thread)
+
+		if(self.header.idtype == 'long'): ramobj.r_idtype = np.int32(-1)
+		elif(self.header.idtype == 'long64'): ramobj.r_idtype = np.int32(1)
+		else: self.errout('Wrong value for idtype')
+
+		if(self.header.famtype == 'old'): ramobj.r_famtype = np.int32(-1)
+		elif(self.header.famtype == 'new'): ramobj.r_famtype = np.int32(1)
+		else: self.errout('Wrong value for famtype')
+
+		ramobj.r_skip_domain = np.int32(-1)
+		if(self.header.skiprd_domain == 1): ramobj.r_skip_domain = np.int32(1)
+
+		ramobj.r_skip_time = np.int32(-1)
+		if(self.header.skiprd_time == 1): ramobj.r_skip_time = np.int32(1)
+
+		ramobj.r_skip_metal = np.int32(-1)
+		if(self.header.skiprd_metal == 1): ramobj.r_skip_metal = np.int32(1)
+
+		ramobj.dir_raw = self.header.dir_raw.ljust(1000)
+
+##-----
+## GET FTNS
+##-----
+	##-----
+	## Get Ramses Info
+	##-----
+	def g_info(self, snapnum):
+	
+		fname   = self.header.dir_raw + "output_%0.5d"%snapnum + "/info_%0.5d"%snapnum + ".txt"
+	   
+		fdata1  = np.loadtxt(fname, dtype=object, max_rows=6, delimiter='=')
+		fdata2  = np.loadtxt(fname, dtype=object, skiprows=7, max_rows=11, delimiter='=')
+
+		kpc     = 3.086e21 #3.08568025e21
+		twopi   = 6.2831853e0
+		hplanck = 6.6262000e-27
+		eV      = 1.6022000e-12
+		kB      = 1.3806200e-16
+		clight  = 2.9979250e+10
+		Gyr     = 3.1536000e+16
+		X       = 0.76
+		Y       = 0.24 
+		rhoc    = 1.8800000e-29
+		mH      = 1.6600000e-24
+		mu_mol  = 1.2195e0
+		G       = 6.67259e-8
+		m_sun   = 1.98892e33
+
+		cgs 	= {'kpc':kpc, 'hplanck':hplanck, 'eV':eV, 'kB':kB, 'clight':clight, 'Gyr':Gyr, 'mH':mH, 'G':G, 'm_sun':m_sun}
+
+		info    = {'ncpu':0, 'ndim':0, 'levmin':0, 'levmax':0, 'aexp':0, 
+				'H0':0, 'oM':0, 'oB':0, 'oL':0, 'unit_l':0, 'unit_d':0, 'unit_T2':0, 'nH':0, 
+				'unit_t':0, 'kms':0, 'unit_m':0, 'hindex':0, 'cgs':cgs}
+
+		info['ncpu']    = np.int32(fdata1[0][1])
+		info['ndim']    = np.int32(fdata1[1][1])
+		info['levmin']  = np.int32(fdata1[2][1])
+		info['levmax']  = np.int32(fdata1[3][1])
+		info['aexp']    = np.double(fdata2[2][1])
+		info['H0']      = np.double(fdata2[3][1])
+		info['oM']      = np.double(fdata2[4][1])
+		info['oL']      = np.double(fdata2[5][1])
+		info['oB']      = np.double(fdata2[7][1])
+		info['unit_l']  = np.double(fdata2[8][1])
+		info['unit_d']  = np.double(fdata2[9][1])
+		info['unit_t']  = np.double(fdata2[10][1])
+		info['unit_T2'] = np.double(1.66e-24) / np.double(1.3806200e-16) * np.double(info['unit_l'] / info['unit_t'])**2
+		info['nH']      = np.double(0.76) / np.double(1.66e-24) * info['unit_d']
+		info['kms']     = info['unit_l'] / info['unit_t'] / 1e5
+		info['unit_m']  = info['unit_d'] * info['unit_l']**3
+
+		info['hindex']  = np.double(np.loadtxt(fname, dtype=object, skiprows=21)[:,1:])
+
+		return info		
+
+	##-----
+	## Get Physical time from conformal time
+	##-----
+	def g_ptime(self, n_snap, t_conf):
+
+		#----- Initial settings
+		info 	= self.g_info(n_snap)
+		
+
+		#----- Allocate
+		time 	= np.zeros(len(t_conf), dtype=[('sfact', '<f8'), ('gyr', '<f8'), ('redsh', '<f8')])
+
+		#----- Get Conformal Time - Scale factor table
+		c_table 	= self.g_cfttable(info)
+
+		#----- Interpolation
+		lint = interpolate.interp1d(c_table['conft'],c_table['sfact'],kind = 'quadratic')
+		time['sfact'][:] 	= lint(t_conf)
+		time['redsh'][:]	= 1./time['sfact'][:] - 1.
+
+		#----- Get Gyr from scale factor table
+		g_table = self.g_gyrtable(info)
+
+		#----- Interplation
+		lint = interpolate.interp1d(g_table['redsh'],g_table['gyr'],kind = 'quadratic')
+		t0  = lint( 1./info['aexp'] - 1.)
+
+		time['gyr'][:] 		= lint(time['redsh'][:]) - t0
+
+		return time
+
+	##-----
+	## Generate or Load Confal-Gyr Table
+	##-----
+	def g_cfttable_ftn(self, X, oM, oL):
+		return 1./(X**3 * np.sqrt(oM/X**3 + oL))
+
+	def g_cfttable(self, info):
+
+
+		H0     = info['H0']
+		oM     = info['oM']
+		oL     = info['oL']
+
+		# reference path is correct?
+		fname 	= 'table/cft_%0.5d'%(H0*1000.) + '_%0.5d'%(oM*100000.) + '_%0.5d'%(oL*100000.) + '.pkl'
+		isfile 	= os.path.isfile(fname)
+
+		if(isfile==True):
+			with open(fname, 'rb') as f:
+				data = pickle.load(f)
+		else:
+			n_table = np.int32(10000)
+			data    = np.zeros(n_table, dtype=[('sfact','<f8'), ('conft','<f8')])
+			data['sfact'][:]    = np.array(range(n_table),dtype='<f8')/(n_table - 1.) * 0.98 + 0.02
+
+			ind     = np.array(range(n_table),dtype='int32')
+			for i in ind:
+				data['conft'][i]  = integrate.quad(self.g_cfttable_ftn,data['sfact'][i],1.,args=(oM,oL))[0] * (-1.)
+
+			with open(fname, 'wb') as f:
+				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+
+		return data
+
+	##-----
+	## Generate or Load Sfactor-Gyr Table
+	##-----
+	def g_gyrtable_ftn(self, X, oM, oL):
+		return 1./(1.+X)/np.sqrt(oM*(1.+X)**3 + oL)
+
+	def g_gyrtable(self, info):
+
+		H0     = info['H0']
+		oM     = info['oM']
+		oL     = info['oL']
+
+		fname   = 'table/gyr_%0.5d'%(H0*1000.) + '_%0.5d'%(oM*100000.) + '_%0.5d'%(oL*100000.) + '.pkl'
+		isfile = os.path.isfile(fname)
+
+		if(isfile==True):
+			with open(fname, 'rb') as f:
+				data = pickle.load(f)
+		else:
+			n_table = np.int32(10000)
+			data    = np.zeros(n_table, dtype=[('redsh','<f8'),('gyr','<f8')])
+			data['redsh'][:]    = 1./(np.array(range(n_table),dtype='<f8')/(n_table - 1.) * 0.98 + 0.02) - 1.
+			data['gyr'][0]  = 0.
+
+			ind     = np.array(range(n_table),dtype='int32')
+			for i in ind:
+				data['gyr'][i]  = integrate.quad(self.g_gyrtable_ftn,0.,data['redsh'][i], args=(oM, oL))[0]
+				data['gyr'][i]  *= (1./H0 * np.double(3.08568025e19) / np.double(3.1536000e16))
+
+			with open(fname, 'wb') as f:
+				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+
+		return data
+
+
+	##-----
+	## Get Domain containing a volume dl^3 centered at (x0, y0, z0)
+	##	x0, y0, z0, dl should be given in pKpc unit
+	##-----
+	def g_domain(self, n_snap, x0, y0, z0, dl):
+		info 	= self.g_info(n_snap)
+
+		x0 = np.array(x0, dtype='<f8')
+		y0 = np.array(y0, dtype='<f8')
+		z0 = np.array(z0, dtype='<f8')
+		dl = np.array(dl, dtype='<f8')
+
+		print(x0, y0, z0, dl)
+
+		n_gal 	= np.size(x0)
+		n_mpi 	= info['ncpu']
+
+		if(np.size(x0) != np.size(dl)): dl = x0*0. + np.amax(dl)
+
+		x0_s 	= x0 * (info['cgs']['kpc'] / info['unit_l'])
+		y0_s 	= y0 * (info['cgs']['kpc'] / info['unit_l'])
+		z0_s 	= z0 * (info['cgs']['kpc'] / info['unit_l'])
+		dl_s 	= dl * (info['cgs']['kpc'] / info['unit_l'])
+
+		print(x0_s, y0_s, z0_s, dl_s)
+
+		#----- Fortran Settings
+		find_domain_py.n_ptcl 	= np.int32(n_gal)
+		find_domain_py.n_mpi 	= np.int32(n_mpi)
+		find_domain_py.n_thread	= np.int32(self.num_thread)
+		find_domain_py.n_dim 	= np.int32(3)
+		find_domain_py.levmax	= np.int32(info['levmax'])
+
+
+		##----- Find Domain
+		find_domain_py.find_domain(x0_s, y0_s, z0_s, dl_s, info['hindex'])
+		dom_list 	= find_domain_py.dom_list
+
+		if(np.size(np.where(dom_list > 0)) == 0):
+			self.errorout('No domains are found (error)')
+			find_domain_py.find_domain_free()
+			return -1
+
+
+		##----- Merge
+		dom_all 	= np.zeros(n_gal*n_mpi, dtype=np.int32) - 1
+
+		i0 = 0
+		for i in range(0, n_gal):
+			cut = np.array(np.where(dom_list[i,:] > 0),dtype=np.int32) + 1
+
+			if(np.size(cut) == 0):
+				print(' ? ')
+				return -1
+
+			dom_all[i0:i0+np.size(cut)] = cut
+			i0 = i0 + np.size(cut)
+
+		dom_all = np.unique(dom_all)
+		return dom_all[1:]
 
 ##-----
 ## LOAD CATALOG ROUTINES
 ##-----
+
+	##-----
+    ## Load Galaxy
+    ##-----
 	class r_gal_parallel:
 		def __init__(self, vrobj, h5data, gidlist, galdata):
 			self.galdata = galdata
@@ -271,4 +518,106 @@ class veluga:
 					sleep(0.5)
 
 			return galdata
+
+
+	##-----
+	## Return Member particle ID
+	##-----
+	def r_pid(self, n_snap, id0, horg='g'):
+
+		# Path setting
+		if(horg=='h'): fname = self.header.dir_catalog + 'Halo/VR_Halo/snap_%0.4d'%n_snap + '.hdf5'
+		elif(horg=='g'): fname = self.header.dir_catalog + 'Galaxy/VR_Galaxy/snap_%0.4d'%n_snap+'.hdf5'
+		else:
+			self.errout([' Wrong argument for the horg ', '     horg = "g" (for galaxy) or "h" (for halo)'])
+
+		# Open hdf5
+		dat     = h5py.File(fname, 'r')
+
+		str0  = 'ID_%0.6d'%id0 + '/P_Prop/P_ID'
+		return np.array(dat.get(str0))
+
+	##-----
+	## Return Domain List
+	##-----
+	def r_domain(self, n_snap, id0, horg='g'):
+		# Path setting
+		if(horg=='h'): fname = self.header.dir_catalog + 'Halo/VR_Halo/snap_%0.4d'%n_snap + '.hdf5'
+		elif(horg=='g'): fname = self.header.dir_catalog + 'Galaxy/VR_Galaxy/snap_%0.4d'%n_snap+'.hdf5'
+		else:
+			self.errout([' Wrong argument for the horg ', '     horg = "g" (for galaxy) or "h" (for halo)'])
+
+		# Open hdf5
+		dat     = h5py.File(fname, 'r')
+
+		str0  = 'ID_%0.6d'%id0 + '/Domain_List'
+		dlist0= np.array(dat.get(str0))
+
+		return np.int32(np.where(dlist0 > 0)[0] + 1)
+
+	##-----
+	## Load Particle of a galaxy
+	##  To do list
+	##      *) Halo member load is not implemented
+	##
+	##	simout=True results in data unit in simulation units
+	##-----
+	def r_part(self, n_snap, id0, horg='g', g_simunit=False, g_ptime=False):
+
+
+		## Load requirements
+		pid 	= self.r_pid(n_snap, id0, horg=horg)
+		dom_list= self.r_domain(n_snap, id0, horg=horg)
+		info 	= self.g_info(n_snap)	
+
+		## Initial set
+		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
+		n_ptcl 	= np.size(pid)
+
+		## Fortran settings for READ
+		self.ramses_part_input(get_ptcl_py)
+		if(horg == 'g'): get_ptcl_py.r_ptype = np.int32(2)
+		elif(horg == 'h'): get_ptcl_py.r_ptype = np.int32(1)
+
+		if(horg == 'h'): get_ptcl_py.dmp_mass = dmp_mass
+
+		## Get by Fortran
+		get_ptcl_py.get_ptcl(n_snap, pid, dom_list)
+
+		## Allocate
+		part 	= self.allocate(n_ptcl, type='part')
+
+		part['xx'] 	= get_ptcl_py.p_dbl[:,0]
+		part['yy'] 	= get_ptcl_py.p_dbl[:,1]
+		part['zz'] 	= get_ptcl_py.p_dbl[:,2]
+		part['vx'] 	= get_ptcl_py.p_dbl[:,3]
+		part['vy'] 	= get_ptcl_py.p_dbl[:,4]
+		part['vz'] 	= get_ptcl_py.p_dbl[:,5]
+		part['mp'] 	= get_ptcl_py.p_dbl[:,6]
+		part['ap'] 	= get_ptcl_py.p_dbl[:,7]
+		part['zp'] 	= get_ptcl_py.p_dbl[:,8]
+		part['id'] 	= get_ptcl_py.p_lnt[:,0]
+		if(self.header.famtype == 'famtype'): part['family'] = get_ptcl_py.p_lnt[:,1]
+
+		get_ptcl_py.get_ptcl_deallocate()
+
+		##
+		if(g_simunit==False):
+			part['xx'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			part['yy'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			part['zz'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			part['vx'] 	*= (info['kms'])
+			part['vy'] 	*= (info['kms'])
+			part['vz'] 	*= (info['kms'])
+			part['mp']	*= (info['unit_m'] / info['cgs']['m_sun'])
+
+		if(g_ptime==True):
+			ptime = self.g_ptime(n_snap, part['ap'])
+			part['gyr'] = ptime['gyr']
+			part['sfact'] = ptime['sfact']
+			part['redsh'] = ptime['redsh']
+
+
+		return part
+
 

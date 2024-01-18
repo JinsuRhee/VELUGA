@@ -249,10 +249,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	RETURN, GP
 END
 
-FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
+FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 
 	;;-----
-	;; READ MEMBER PTCL
+	;; READ MEMBER Part
 	;;	/simout 	- output as the simulation raw unit
 	;;-----
 	IF ~KEYWORD_SET(horg) THEN horg='g'
@@ -294,7 +294,7 @@ FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
 	;; POST PROCESSING
 	cut	= WHERE(pinfo(*,0) gt -1.0d7, ncut)
 	IF MAX(cut) LT 0 THEN BEGIN
-		self->errorout, '		r_ptcl: NO MATCHED PTCLs'
+		self->errorout, '		r_part: NO MATCHED PTCLs'
 		RETURN, -1.
 	ENDIF
 
@@ -705,7 +705,7 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	ENDELSE
 END
 
-FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
 
 	;;-----
 	;; Read Particle within a sphere
@@ -986,7 +986,7 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	;;-----
 	;; Read all ptcls
 	;;-----
-	part 	= self->g_part(0.d, 0.d, 0.d, 0.d, snap0, dom_list=dom_all)
+	part 	= self->g_part(snap0, 0.d, 0.d, 0.d, 0.d, dom_list=dom_all)
 
 	dm_ind 	= WHERE(part.family EQ 1L, nn_dm)
 	part 	= part(dm_ind)
