@@ -167,24 +167,24 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	;; Initial cut (Not implemented Yet)
 	;;-----
 	IF id0 LT 0L THEN BEGIN 
-;		IF KEYWORD_SET(masscut) THEN BEGIN
-;			IF horg EQ 'g' THEN $
-;				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
-;			IF horg EQ 'h' THEN $
-;				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
-;
-;			IF nn EQ 0L THEN BEGIN
-;				PRINT, '%123123-----'
-;				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
-;				PRINT, '	(CONVERT TO READING ALL GALS'
-;
-;				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
-;			ENDIF
-;			n_gal	= nn
-;		ENDIF ELSE BEGIN
+	;		IF KEYWORD_SET(masscut) THEN BEGIN
+	;			IF horg EQ 'g' THEN $
+	;				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
+	;			IF horg EQ 'h' THEN $
+	;				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
+	;
+	;			IF nn EQ 0L THEN BEGIN
+	;				PRINT, '%123123-----'
+	;				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
+	;				PRINT, '	(CONVERT TO READING ALL GALS'
+	;
+	;				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
+	;			ENDIF
+	;			n_gal	= nn
+	;		ENDIF ELSE BEGIN
 			mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
 			n_gal	= nn
-;		ENDELSE
+	;		ENDELSE
 	ENDIF ELSE BEGIN
 		mcut	= WHERE(ID EQ id0, nn)
 		n_gal	= nn
@@ -318,15 +318,15 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 	output.id 	= pid(cut)
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
-		output.xx 	*= (info.unit_l/3.086e21)
-		output.yy 	*= (info.unit_l/3.086e21)
-		output.zz 	*= (info.unit_l/3.086e21)
+		output.xx 	*= (info.unit_l/info.cgs.kpc)
+		output.yy 	*= (info.unit_l/info.cgs.kpc)
+		output.zz 	*= (info.unit_l/info.cgs.kpc)
 
 		output.vx 	*= (info.kms)
 		output.vy 	*= (info.kms)
 		output.vz 	*= (info.kms)
 
-		output.mp 	*= (info.unit_m / 1.98892d33)
+		output.mp 	*= (info.unit_m / info.cgs.m_sun)
 	ENDIF
 
 	RETURN, output
@@ -553,6 +553,31 @@ PRO veluga::g_makearr, array, input, index, unitsize=unitsize, type=type
 	
 	index = n1 + 1L
 END
+
+FUNCTION veluga::g_boundind, x, y, z, xr=xr, yr=yr, zr=zr
+	;;-----
+	;; Return index within a box
+	;;-----
+
+	tmp 	= 'ind = WHERE('
+
+	IF KEYWORD_SET(xr) THEN BEGIN
+		tmp += 'x GE xr(0) AND x LT xr(1) '
+	ENDIF
+
+	IF KEYWORD_SET(yr) THEN BEGIN
+		tmp += 'AND y GE yr(0) AND y LT yr(1) '
+	ENDIF
+
+	IF KEYWORD_SET(zr) THEN BEGIN
+		tmp += 'AND z GE zr(0) AND z LT zr(1) '
+	ENDIF
+	tmp     += ')'
+	void    = EXECUTE(tmp)
+
+	RETURN, ind
+END
+
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
@@ -595,7 +620,7 @@ FUNCTION veluga::g_info, snap0
 	CLOSE, 2
 
 	;; unit in cgs
-	kpc     = 3.08568025e21
+	kpc     = 3.086d21;3.08568025e21
 	twopi   = 6.2831853d0
 	hplanck = 6.6262000d-27
 	eV      = 1.6022000d-12
@@ -608,7 +633,7 @@ FUNCTION veluga::g_info, snap0
 	mH      = 1.6600000d-24
 	mu_mol  = 1.2195d0
 	G       = 6.67259e-8
-	m_sun   = 1.98892e33
+	m_sun   = 1.98892d33
 
 	cgs 	= {kpc:kpc, hplanck:hplanck, eV:eV, kB:kB, clight:clight, Gyr:Gyr, mH:mH, G:G, m_sun:m_sun}
 
@@ -664,10 +689,10 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 
 	IF N_ELEMENTS(xc2) NE N_ELEMENTS(rr2) THEN rr2 = xc2*0.d + MAX(rr2)
 
-	xc 	= DOUBLE(xc2)*3.086e21 / info.unit_l
-	yc 	= DOUBLE(yc2)*3.086e21 / info.unit_l
-	zc 	= DOUBLE(zc2)*3.086e21 / info.unit_l
-	rr 	= DOUBLE(rr2)*3.086e21 / info.unit_l
+	xc 	= DOUBLE(xc2)*info.cgs.kpc / info.unit_l
+	yc 	= DOUBLE(yc2)*info.cgs.kpc / info.unit_l
+	zc 	= DOUBLE(zc2)*info.cgs.kpc / info.unit_l
+	rr 	= DOUBLE(rr2)*info.cgs.kpc / info.unit_l
 
 	dom_list 	= LONARR(n_gal, n_mpi)
 
@@ -805,15 +830,15 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part.id 	= id
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
-		part.xx 	*= (info.unit_l/3.086e21)	;; [kpc]
-		part.yy 	*= (info.unit_l/3.086e21)
-		part.zz 	*= (info.unit_l/3.086e21)
+		part.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		part.yy 	*= (info.unit_l/info.cgs.kpc)
+		part.zz 	*= (info.unit_l/info.cgs.kpc)
 
 		part.vx 	*= info.kms
 		part.vy 	*= info.kms
 		part.vz 	*= info.kms
 
-		part.mp 	*= (info.unit_m / 1.98892d33)
+		part.mp 	*= (info.unit_m / info.cgs.m_sun)
 
 	ENDIF
 
@@ -842,10 +867,10 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	ncpu 	= N_ELEMENTS(dom_list)
 	dir 	= settings.dir_raw + 'output_' + STRING(snap0, format='(I5.5)')
 
-	xc	= xc2 / info.unit_l * 3.086d21
-	yc	= yc2 / info.unit_l * 3.086d21
-	zc	= zc2 / info.unit_l * 3.086d21
-	rr	= rr2 / info.unit_l * 3.086d21
+	xc	= xc2 / info.unit_l * info.cgs.kpc
+	yc	= yc2 / info.unit_l * info.cgs.kpc
+	zc	= zc2 / info.unit_l * info.cgs.kpc
+	rr	= rr2 / info.unit_l * info.cgs.kpc
 
 	IF ~KEYWORD_SET(xr) OR ~KEYWORD_SET(yr) OR ~KEYWORD_SET(zr) THEN BEGIN
 		xr	= [-1d,1d] * rr + xc
@@ -938,16 +963,16 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
 
-		cell.xx 	*= (info.unit_l/3.086e21)	;; [kpc]
-		cell.yy 	*= (info.unit_l/3.086e21)
-		cell.zz 	*= (info.unit_l/3.086e21)
+		cell.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		cell.yy 	*= (info.unit_l/info.cgs.kpc)
+		cell.zz 	*= (info.unit_l/info.cgs.kpc)
 
 		cell.vx 	*= info.kms					;; [km/s]
 		cell.vy 	*= info.kms
 		cell.vz 	*= info.kms
 
-		cell.dx 	*= (info.unit_l/3.086e21)	;; [kpc]
-		cell.mp 	= mesh_hd(*,0) * info.unit_d * (mesh_dx*info.unit_l)^3.d / 1.98892d33 	;; [Msun]
+		cell.dx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		cell.mp 	= mesh_hd(*,0) * info.unit_d * (mesh_dx*info.unit_l)^3.d / info.cgs.m_sun 	;; [Msun]
 
 		cell.den 	*= (info.unit_nH)			;; [/cc]
 		cell.temp 	*= (1.d/mesh_hd(*,0) * info.unit_T2)	;; [K/mu]
@@ -1315,7 +1340,7 @@ PRO veluga::g_potential, cell, part, $
 	;; Compute potential
 	;;-----
 	Gconst 		= 6.67408d-11 		;; m^3 kg^-1 s^-2
-	mtokpc 		= (1./3.086d19)
+	mtokpc 		= (1./ 3.086d19)
 	kgtoMsun 	= (1./1.98892d30)
 	Gconst 		*= (mtoKpc / kgtoMsun * 1d-6)	;; (km/s)^2 Kpc/Msun
 

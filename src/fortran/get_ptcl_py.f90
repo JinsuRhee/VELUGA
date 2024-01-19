@@ -23,8 +23,6 @@ CONTAINS
     INTEGER(KIND=8), DIMENSION(:), INTENT(IN) :: id
     INTEGER(KIND=4), DIMENSION(:), INTENT(IN) :: dom_list
 
-    CHARACTER(LEN=100) aaa
-
     !!-----
     !! LOCAL VARIABLES
     !!-----
@@ -112,6 +110,128 @@ CONTAINS
     !!-----
     CALL deallocate_dbl()
     CALL deallocate_lint()
+
+    END SUBROUTINE
+
+!!-----
+!! Get part within a box
+!!-----
+    SUBROUTINE get_ptcl_box(n_snap, x0, y0, z0, dx, dom_list)
+
+    
+    USE read_ramses_py
+    USE omp_lib
+
+    IMPLICIT NONE
+
+    INTEGER(KIND=4), INTENT(IN) :: n_snap
+    REAL(KIND=8), INTENT(IN) :: x0, y0, z0, dx
+    INTEGER(KIND=4), DIMENSION(:), INTENT(IN) :: dom_list
+
+    !!-----
+    !! LOCAL VARIABLES
+    !!-----
+    TYPE(ramses_type) ftype
+    INTEGER(KIND=4) n_raw
+    INTEGER(KIND=4) i, j, k, l, nn
+    INTEGER(KIND=4) n_dm, n_star
+    LOGICAL, DIMENSION(:), ALLOCATABLE :: tag
+
+    !!----- INITIAL SETTINGS
+    ftype%idtype = r_idtype
+    ftype%famtype = r_famtype
+    !ftype%parttype = r_ptype
+    ftype%skip_domain = r_skip_domain
+    ftype%skip_time = r_skip_time
+    ftype%skip_metal = r_skip_metal
+    ftype%dir_raw = dir_raw
+    ftype%dmp_mass = dmp_mass
+    ftype%n_snap = n_snap
+
+    !!-----
+    !! READ RAW PART
+    !!-----
+    CALL read_part(ftype, dom_list, n_thread)
+
+    n_raw   = SIZE(r_lnt(:,1))
+
+    ALLOCATE(tag(1:n_raw))
+    tag = .false.
+
+    !!-----
+    !! Find specified partiles within a box
+    !!-----
+    nn = 0
+    n_dm = 0
+    n_star = 0
+    CALL OMP_SET_NUM_THREADS(n_thread)
+
+    !$OMP PARALLEL DO default(shared) &
+    !$OMP & reduction(+:nn, n_dm, n_star)
+    DO i=1, n_raw
+        IF(r_dbl(i,1) .LT. x0-dx/2.) CYCLE
+        IF(r_dbl(i,1) .GT. x0+dx/2.) CYCLE
+
+        IF(r_dbl(i,2) .LT. y0-dx/2.) CYCLE
+        IF(r_dbl(i,2) .GT. y0+dx/2.) CYCLE
+
+        IF(r_dbl(i,3) .LT. z0-dx/2.) CYCLE
+        IF(r_dbl(i,3) .GT. z0+dx/2.) CYCLE     
+
+        IF(r_ptype .EQ. 0) THEN
+            tag(i) = .true.
+            nn = nn + 1
+            CYCLE
+        ENDIF
+
+        IF(ftype%famtype .EQ. 1) THEN
+            IF(r_lnt(i,2) .EQ. r_ptype) THEN
+                tag(i) = .true.
+                nn = nn + 1
+                CYCLE
+            ENDIF
+        ELSE
+            IF(r_ptype .EQ. 1) THEN !! FOR DM
+                IF(r_dbl(i,8) .EQ. 0. .AND. r_dbl(i,7) .GT. 0.9*dmp_mass) THEN
+                    tag(i) = .true.
+                    nn = nn + 1
+                    r_lnt(i,2) = 1
+                    CYCLE
+                ENDIF
+            ELSE IF(r_ptype .EQ. 2) THEN !! FOR STAR
+                IF(r_dbl(i,8) .LT. 0) THEN
+                    tag(i) = .true.
+                    nn = nn + 1
+                    r_lnt(i,2) = 2
+                    CYCLE
+                ENDIF
+            ELSE
+                    !   ! FOR OTHERS ? TODO
+            ENDIF
+        ENDIF
+    ENDDO
+    !$OMP END PARALLEL DO
+
+    !!-----
+    !! ALLOCATE
+    !!-----
+    CALL get_ptcl_allocate(nn)
+
+    nn = 1
+    DO i=1, n_raw
+        IF(tag(i)) THEN
+            p_dbl(nn,:) = r_dbl(i,:)
+            p_lnt(nn,:) = r_lnt(i,:)
+            nn = nn + 1
+        ENDIF
+    ENDDO
+
+    !!-----
+    !! MEMORY FREE
+    !!-----
+    CALL deallocate_dbl()
+    CALL deallocate_lint()
+    DEALLOCATE(tag)
 
     END SUBROUTINE
 

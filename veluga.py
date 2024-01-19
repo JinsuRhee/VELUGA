@@ -119,20 +119,20 @@ class veluga:
 		fdata1  = np.loadtxt(fname, dtype=object, max_rows=6, delimiter='=')
 		fdata2  = np.loadtxt(fname, dtype=object, skiprows=7, max_rows=11, delimiter='=')
 
-		kpc     = 3.086e21 #3.08568025e21
-		twopi   = 6.2831853e0
-		hplanck = 6.6262000e-27
-		eV      = 1.6022000e-12
-		kB      = 1.3806200e-16
-		clight  = 2.9979250e+10
-		Gyr     = 3.1536000e+16
-		X       = 0.76
-		Y       = 0.24 
-		rhoc    = 1.8800000e-29
-		mH      = 1.6600000e-24
-		mu_mol  = 1.2195e0
-		G       = 6.67259e-8
-		m_sun   = 1.98892e33
+		kpc     = np.double(3.086e21) #3.08568025e21
+		twopi   = np.double(6.2831853e0)
+		hplanck = np.double(6.6262000e-27)
+		eV      = np.double(1.6022000e-12)
+		kB      = np.double(1.3806200e-16)
+		clight  = np.double(2.9979250e+10)
+		Gyr     = np.double(3.1536000e+16)
+		X       = np.double(0.76)
+		Y       = np.double(0.24 )
+		rhoc    = np.double(1.8800000e-29)
+		mH      = np.double(1.6600000e-24)
+		mu_mol  = np.double(1.2195e0)
+		G       = np.double(6.67259e-8)
+		m_sun   = np.double(1.98892e33)
 
 		cgs 	= {'kpc':kpc, 'hplanck':hplanck, 'eV':eV, 'kB':kB, 'clight':clight, 'Gyr':Gyr, 'mH':mH, 'G':G, 'm_sun':m_sun}
 
@@ -273,8 +273,6 @@ class veluga:
 		z0 = np.array(z0, dtype='<f8')
 		dl = np.array(dl, dtype='<f8')
 
-		print(x0, y0, z0, dl)
-
 		n_gal 	= np.size(x0)
 		n_mpi 	= info['ncpu']
 
@@ -284,8 +282,6 @@ class veluga:
 		y0_s 	= y0 * (info['cgs']['kpc'] / info['unit_l'])
 		z0_s 	= z0 * (info['cgs']['kpc'] / info['unit_l'])
 		dl_s 	= dl * (info['cgs']['kpc'] / info['unit_l'])
-
-		print(x0_s, y0_s, z0_s, dl_s)
 
 		#----- Fortran Settings
 		find_domain_py.n_ptcl 	= np.int32(n_gal)
@@ -321,6 +317,70 @@ class veluga:
 
 		dom_all = np.unique(dom_all)
 		return dom_all[1:]
+
+	##-----
+	## Get Particle within a volume dl^3 centered at (x0, y0, z0)
+	##  x0, y0, z0, dl should be given in pKpc unit
+	##  ptype as 'all' 'dm' or 'star'
+	##-----
+	def g_part(self, n_snap, x0, y0, z0, dl, ptype='all', g_simunit=False, g_ptime=False):
+
+		##----- Initial Settings
+		dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
+		info = self.g_info(n_snap)
+		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
+
+		x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
+		y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
+		z0_s = np.double(z0 * (info['cgs']['kpc'] / info['unit_l']))
+		dl_s = np.double(dl * (info['cgs']['kpc'] / info['unit_l']))
+
+		##----- Fortran Settigns
+		self.ramses_part_input(get_ptcl_py)
+		if(ptype == 'all'): get_ptcl_py.r_ptype = np.int32(0)
+		elif(ptype == 'dm'): get_ptcl_py.r_ptype = np.int32(1)
+		elif(ptype == 'star'): get_ptcl_py.r_ptype = np.int32(2)
+		get_ptcl_py.dmp_mass = dmp_mass
+
+		## Get by Fortran
+		get_ptcl_py.get_ptcl_box(n_snap, x0_s, y0_s, z0_s, dl_s, dom_list)
+
+		## Allocate
+		n_ptcl = np.size(get_ptcl_py.p_dbl[:,0])
+		part 	= self.allocate(n_ptcl, type='part')
+
+		part['xx'] 	= get_ptcl_py.p_dbl[:,0]
+		part['yy'] 	= get_ptcl_py.p_dbl[:,1]
+		part['zz'] 	= get_ptcl_py.p_dbl[:,2]
+		part['vx'] 	= get_ptcl_py.p_dbl[:,3]
+		part['vy'] 	= get_ptcl_py.p_dbl[:,4]
+		part['vz'] 	= get_ptcl_py.p_dbl[:,5]
+		part['mp'] 	= get_ptcl_py.p_dbl[:,6]
+		part['ap'] 	= get_ptcl_py.p_dbl[:,7]
+		part['zp'] 	= get_ptcl_py.p_dbl[:,8]
+		part['id'] 	= get_ptcl_py.p_lnt[:,0]
+		part['family'] = get_ptcl_py.p_lnt[:,1]
+
+		get_ptcl_py.get_ptcl_deallocate()
+
+		##
+		if(g_simunit==False):
+			part['xx'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			part['yy'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			part['zz'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			part['vx'] 	*= (info['kms'])
+			part['vy'] 	*= (info['kms'])
+			part['vz'] 	*= (info['kms'])
+			part['mp']	*= (info['unit_m'] / info['cgs']['m_sun'])
+
+		if(g_ptime==True):
+			ptime = self.g_ptime(n_snap, part['ap'])
+			part['gyr'] = ptime['gyr']
+			part['sfact'] = ptime['sfact']
+			part['redsh'] = ptime['redsh']
+
+
+		return part
 
 ##-----
 ## LOAD CATALOG ROUTINES
