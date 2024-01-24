@@ -17,6 +17,7 @@ import scipy.integrate as integrate
 
 
 from src.fortran.get_ptcl_py import get_ptcl_py
+from src.fortran.get_cell_py import get_cell_py
 from src.fortran.find_domain_py import find_domain_py
 
 
@@ -105,6 +106,17 @@ class veluga:
 		if(self.header.skiprd_metal == 1): ramobj.r_skip_metal = np.int32(1)
 
 		ramobj.dir_raw = self.header.dir_raw.ljust(1000)
+
+	def ramses_cell_input(self, ramobj):
+
+		info = self.g_info(1)
+
+		ramobj.n_thread = np.int32(self.num_thread)
+		ramobj.n_mpi = np.int32(self.header.ndomain)
+		ramobj.n_dim = np.int32(3)
+		ramobj.levmax = np.int32(info['levmax'])
+		ramobj.dir_raw = self.header.dir_raw.ljust(1000)
+
 
 ##-----
 ## GET FTNS
@@ -322,18 +334,28 @@ class veluga:
 	## Get Particle within a volume dl^3 centered at (x0, y0, z0)
 	##  x0, y0, z0, dl should be given in pKpc unit
 	##  ptype as 'all' 'dm' or 'star'
+	##
+	##	if dom_list is given as an numpy integer array, it overwries the domain found with the given volume and return all ptcls in the argued domain
 	##-----
-	def g_part(self, n_snap, x0, y0, z0, dl, ptype='all', g_simunit=False, g_ptime=False):
+	def g_part(self, n_snap, x0, y0, z0, dl, ptype='all', dom_list=None, g_simunit=False, g_ptime=False):
 
 		##----- Initial Settings
-		dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
+
 		info = self.g_info(n_snap)
 		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
 
-		x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
-		y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
-		z0_s = np.double(z0 * (info['cgs']['kpc'] / info['unit_l']))
-		dl_s = np.double(dl * (info['cgs']['kpc'] / info['unit_l']))
+		if(dom_list == None):
+			dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
+			x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
+			y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
+			z0_s = np.double(z0 * (info['cgs']['kpc'] / info['unit_l']))
+			dl_s = np.double(dl * (info['cgs']['kpc'] / info['unit_l']))
+		else:
+			x0_s = np.double(0.5)
+			y0_s = np.double(0.5)
+			z0_s = np.double(0.5)
+			z0_s = np.double(0.5)
+			dl_s = np.double(1e8)
 
 		##----- Fortran Settigns
 		self.ramses_part_input(get_ptcl_py)
@@ -382,6 +404,84 @@ class veluga:
 
 		return part
 
+	##-----
+	## Get Cell within a volume dl^3 centered at (x0, y0, z0)
+	##  x0, y0, z0, dl should be given in pKpc unit
+	##
+	##
+	##	if dom_list is given as an numpy integer array, it overwries the domain found with the given volume and return all cells in the argued domain
+	##-----
+	def g_cell(self, n_snap, x0, y0, z0, dl, dom_list=None, g_simunit=False):
+
+		##----- Initial Settings
+
+		info = self.g_info(n_snap)
+		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
+
+		if(dom_list == None):
+			dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
+			x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
+			y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
+			z0_s = np.double(z0 * (info['cgs']['kpc'] / info['unit_l']))
+			dl_s = np.double(dl * (info['cgs']['kpc'] / info['unit_l']))
+		else:
+			dom_list = np.int32(dom_list)
+			x0_s = np.double(0.5)
+			y0_s = np.double(0.5)
+			z0_s = np.double(0.5)
+			z0_s = np.double(0.5)
+			dl_s = np.double(1e8)
+
+		##----- Fortran Settigns
+		self.ramses_cell_input(get_cell_py)
+
+		
+
+		##----- Get cell by Fortran
+		get_cell_py.get_cell_box(n_snap, x0_s, y0_s, z0_s, dl_s, dom_list)
+
+
+		##----- Allocate
+		n_cell = np.size(get_cell_py.p_dbl[:,0])
+		cell 	= self.allocate(n_cell, type='cell')
+
+		##----- Get Hydro descriptor
+		cell['xx'] 	= get_cell_py.p_dbl[:,0]
+		cell['yy'] 	= get_cell_py.p_dbl[:,1]
+		cell['zz'] 	= get_cell_py.p_dbl[:,2]
+
+		hind = np.int32(3)
+		for htag in self.header.hydro_variables:
+			if htag == 'skip': continue
+			cell[htag] = get_cell_py.p_dbl[:,hind]
+			hind += 1
+
+		cell['dx'] 	= get_cell_py.p_dbl[:,hind+1]
+		cell['level'] = get_cell_py.p_int[:,0]
+
+		
+		##----- Memory free
+		get_cell_py.get_cell_deallocate()
+
+		##
+		cell['mp'] = cell['den'] * info['unit_d'] * (cell['dx']*info['unit_l'])**3 / info['cgs']['m_sun'] ## Msun
+		cell['UE'] = cell['temp']/cell['den']/(5./3.-1.) * info['unit_T2'] / (1.66e-24) * 1.38049e-23 * 1e-3 ## [km/s]^2
+		cell['temp']*= (1./cell['den'])
+
+		if(g_simunit==False):
+			cell['xx'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['yy'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['zz'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['vx'] 	*= (info['kms'])
+			cell['vy'] 	*= (info['kms'])
+			cell['vz'] 	*= (info['kms'])
+			cell['dx']	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['den'] *= info['nH']		# [/cc]
+			cell['temp']*= info['unit_T2'] 		# [K/mu]
+
+		
+
+		return cell
 ##-----
 ## LOAD CATALOG ROUTINES
 ##-----
@@ -578,6 +678,52 @@ class veluga:
 					sleep(0.5)
 
 			return galdata
+
+	##-----
+	## Return cell in a box with dx^3 centered at the galaxy center
+	##	
+	##-----
+	def r_cell(self, n_snap, id0, dx, horg='g'):
+
+		g = self.r_gal(n_snap, id0, horg=horg)
+
+		return g_cell(n_snap, g['Xc'], g['Yc'], g['Zc'], dx)
+
+
+	def f_rdamr(self, n_snap, id0, radius, horg='g', info=None, domlist=None, num_thread=None, amrtype=False):
+
+		##----- Settings
+		gf  = vr_getftns(self)
+		if(info is None): info = gf.g_info(n_snap)
+		if(num_thread is None): num_thread = self.num_thread
+
+		##----- Read gal
+		galtmp  = self.f_rdgal(n_snap, id0, horg=horg)
+		   
+		##----- Get Domain
+		if(domlist is None):
+			if(radius<0): domlist = np.int32(np.arange(1, info['ncpu']+1))
+			else:
+				domlist = gf.g_domain(n_snap, galtmp['Xc'], galtmp['Yc'], galtmp['Zc'], radius, info=info)
+		else:
+			if not (isinstance(domlist, np.ndarray)): domlist = np.int32(np.array(domlist))
+
+			if(np.amin(domlist) < 1 or np.amax(domlist) > info['ncpu']):
+				print('%-----')
+				print(' Wrongly argued')
+				print('     out of range of the domain: domlist')
+				print('%-----')
+				sys.exit(1)
+
+		##----- Set box
+		xc = galtmp['Xc']
+		yc = galtmp['Yc']
+		zc = galtmp['Zc']
+		vxc = galtmp['VXc']
+		vyc = galtmp['VYc']
+		vzc = galtmp['VZc']
+
+		return gf.g_amr(n_snap, xc, yc, zc, vxc, vyc, vzc, radius, domlist=domlist, num_thread=num_thread, info=info, amrtype=amrtype)
 
 
 	##-----

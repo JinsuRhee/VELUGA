@@ -1,8 +1,7 @@
 ##-----
 ## FILE LIST FOR FORTRAN
 ##-----
-FILES='get_ptcl_py.f90 find_domain_py.f90'
-#  get_flux_py.f90  get_ptcl_py.f90  jsamr2cell_py.f90  jsamr2cell_totnum_py.f90  js_gasmap_py.f90  js_getpt_ft.f90  jsrd_part_totnum_py.f90  jsrd_part_py.f90 js_getsfe_ft.f90'
+FILES='get_ptcl_py.f90 get_cell_py.f90 find_domain_py.f90'
 
 ##-----
 ## WRAPPER

@@ -694,7 +694,8 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	zc 	= DOUBLE(zc2)*info.cgs.kpc / info.unit_l
 	rr 	= DOUBLE(rr2)*info.cgs.kpc / info.unit_l
 
-	dom_list 	= LONARR(n_gal, n_mpi)
+	dom_list 	= LONARR(n_gal, n_mpi) - 1L
+
 
 	ftr_name 	= settings.dir_lib + 'src/fortran/find_domain.so'
 		larr = LONARR(20) & darr = DBLARR(20)
@@ -848,7 +849,7 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
 
 	;;-----
 	;; Read AMR cells within a sphere
@@ -935,6 +936,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;;-----
 	;; POST PROCESSING
 	;;-----
+
 	cut	= WHERE(mesh_lv GE 0L,ncell)
 	cell 	= self->allocate(ncell, type='cell')
 
