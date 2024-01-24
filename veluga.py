@@ -690,42 +690,6 @@ class veluga:
 		return g_cell(n_snap, g['Xc'], g['Yc'], g['Zc'], dx)
 
 
-	def f_rdamr(self, n_snap, id0, radius, horg='g', info=None, domlist=None, num_thread=None, amrtype=False):
-
-		##----- Settings
-		gf  = vr_getftns(self)
-		if(info is None): info = gf.g_info(n_snap)
-		if(num_thread is None): num_thread = self.num_thread
-
-		##----- Read gal
-		galtmp  = self.f_rdgal(n_snap, id0, horg=horg)
-		   
-		##----- Get Domain
-		if(domlist is None):
-			if(radius<0): domlist = np.int32(np.arange(1, info['ncpu']+1))
-			else:
-				domlist = gf.g_domain(n_snap, galtmp['Xc'], galtmp['Yc'], galtmp['Zc'], radius, info=info)
-		else:
-			if not (isinstance(domlist, np.ndarray)): domlist = np.int32(np.array(domlist))
-
-			if(np.amin(domlist) < 1 or np.amax(domlist) > info['ncpu']):
-				print('%-----')
-				print(' Wrongly argued')
-				print('     out of range of the domain: domlist')
-				print('%-----')
-				sys.exit(1)
-
-		##----- Set box
-		xc = galtmp['Xc']
-		yc = galtmp['Yc']
-		zc = galtmp['Zc']
-		vxc = galtmp['VXc']
-		vyc = galtmp['VYc']
-		vzc = galtmp['VZc']
-
-		return gf.g_amr(n_snap, xc, yc, zc, vxc, vyc, vzc, radius, domlist=domlist, num_thread=num_thread, info=info, amrtype=amrtype)
-
-
 	##-----
 	## Return Member particle ID
 	##-----
