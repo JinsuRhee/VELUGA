@@ -35,7 +35,7 @@ CONTAINS
         INTEGER(KIND=4) :: act_thread, bsize_p
         INTEGER(KIND=4) :: npart, i, k
         INTEGER(KIND=4) :: numnode, level, bstart, bend
-        TYPE(nodetype), DIMENSION(:), ALLOCATABLE :: root, root_dum, root_p, root_pl
+        TYPE(nodetype), DIMENSION(:), ALLOCATABLE :: root, root_dum, root_p, root_pl, root_t
         TYPE(nodetype), DIMENSION(:,:), ALLOCATABLE :: root_2d
         !TYPE(dat), DIMENSION(:), INTENT(inout) :: part
         TYPE(infotype) info, info2
@@ -43,6 +43,7 @@ CONTAINS
         !TYPE(dat), DIMENSION(:), ALLOCATABLE :: partdum
         INTEGER(KIND=4), DIMENSION(:), ALLOCATABLE :: inddum, nums
         INTEGER(KIND=4) idoffset, ind0, ind1, lind, rind, indoffset
+        INTEGER(KIND=4) memdebug, mem_nn
 
         !! Initialize
         npart   = SIZE(mm)
@@ -54,7 +55,6 @@ CONTAINS
         !info%omp_tag    = -1
         !info%n_thread   = n_thread
         !info%dmax_tag   = -1
-
         !! Set Threads
         k = 0.
         DO
@@ -71,7 +71,7 @@ CONTAINS
         ALLOCATE(root(1:npart))
 
         info2 = info
-        info2%bsize = npart / act_thread + 1.
+        info2%bsize = npart / act_thread + 1
         info2%dtype = 0
         info2%vtype = 0
         info2%omp_tag = 1
@@ -88,6 +88,7 @@ CONTAINS
         CALL js_kdtree_buildnode(root, pos, mm, orgind, info2, &
                 numnode, bstart, bend, level)
 
+
         IF(ALLOCATED(root_p)) DEALLOCATE(root_p)
         ALLOCATE(root_p(1:numnode))
         root_p = root(1:numnode)
@@ -96,6 +97,7 @@ CONTAINS
         !! Leaf for seed
         IF(ALLOCATED(root_pl)) DEALLOCATE(root_pl)
         ALLOCATE(root_pl(1:act_thread))
+
 
         k = 1
         DO i=1, numnode
@@ -106,14 +108,17 @@ CONTAINS
         ENDDO
         n_ini      = numnode
 
+        IF(k-1 .NE. act_thread) STOP
         !!----- Build Node
         ! bs, be, partdum, inddum, numnode, level
         ! bs0, be0
         ! n_aft
         IF (ALLOCATED(root_2d)) DEALLOCATE(root_2d)
         ALLOCATE(root_2d(1:npart/act_thread, 1:act_thread))
-        IF (ALLOCATED(nums)) DEALLOCATE(nums)        
-        ALLOCATE(nums(1:act_thread))
+        
+        IF (ALLOCATED(nums)) DEALLOCATE(nums)
+        ALLOCATE(nums(1:act_thread), stat=memdebug)
+
         nums = 0
         n_aft = 0
 
@@ -158,6 +163,7 @@ CONTAINS
         !!--Merge
         ALLOCATE(root(1:n_ini+n_aft))
 
+
         !!!!----- Initial node
         root(1:n_ini) = root_p
         idoffset = root(n_ini)%id - 1
@@ -193,6 +199,7 @@ CONTAINS
           indoffset = root_2d(nums(i),i)%bend
 
         ENDDO
+
 
         DEALLOCATE(root_p, root_pl, root_2d, nums)
         root(1)%numnode = n_ini + n_aft
@@ -290,13 +297,11 @@ CONTAINS
 
         ! for dmax
         IF(info%dmax_tag .EQ. 1) node(numnode)%dmax = js_kdtree_dmax(pos(bstart:bend,:), node(numnode)%cen, info%ndim)
-
         !!----- IS LEAF (some props are only calculated for leafs)
         IF(node(numnode)%ncount .LE. info%bsize) THEN
           !for mass
           node(numnode)%mass  = SUM(mm(bstart:bend))!js_kdtree_total(info, mdum)
           node(numnode)%leaf = 1
-          
           RETURN
         ENDIF
 

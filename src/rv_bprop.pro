@@ -158,25 +158,25 @@ IF run EQ 2L THEN BEGIN
 				
 				FOR fi=0L, n_flux-1L DO BEGIN
 					CASE settings.flux_list(fi) OF
-						'u' 	: abmag(gi).u(ai) 	= veluga->g_mag(ldum.u, ['u'])
-						'g' 	: abmag(gi).g(ai) 	= veluga->g_mag(ldum.g, ['g'])
-						'r' 	: abmag(gi).r(ai) 	= veluga->g_mag(ldum.r, ['r'])
-						'i' 	: abmag(gi).i(ai) 	= veluga->g_mag(ldum.i, ['i'])
-						'z' 	: abmag(gi).z(ai) 	= veluga->g_mag(ldum.z, ['z'])
-						'nuv' 	: abmag(gi).nuv(ai) = veluga->g_mag(ldum.nuv, ['nuv'])
-						'NUV' 	: abmag(gi).nuv(ai) = veluga->g_mag(ldum.nuv, ['nuv'])
+						'u' 	: abmag(gi).u(ai) 	= veluga->g_mag(ldum2.u, ['u'])
+						'g' 	: abmag(gi).g(ai) 	= veluga->g_mag(ldum2.g, ['g'])
+						'r' 	: abmag(gi).r(ai) 	= veluga->g_mag(ldum2.r, ['r'])
+						'i' 	: abmag(gi).i(ai) 	= veluga->g_mag(ldum2.i, ['i'])
+						'z' 	: abmag(gi).z(ai) 	= veluga->g_mag(ldum2.z, ['z'])
+						'nuv' 	: abmag(gi).nuv(ai) = veluga->g_mag(ldum2.nuv, ['nuv'])
+						'NUV' 	: abmag(gi).nuv(ai) = veluga->g_mag(ldum2.nuv, ['nuv'])
 					ENDCASE
 				ENDFOR
 
 				FOR fi=0L, n_flux-1L DO BEGIN
 					CASE settings.flux_list(fi) OF
-						'u' 	: sbf(gi).u(ai) 	= veluga->g_sbf(ldum.u, dsize, ['u'])
-						'g' 	: sbf(gi).g(ai) 	= veluga->g_sbf(ldum.g, dsize, ['g'])
-						'r' 	: sbf(gi).r(ai) 	= veluga->g_sbf(ldum.r, dsize, ['r'])
-						'i' 	: sbf(gi).i(ai) 	= veluga->g_sbf(ldum.i, dsize, ['i'])
-						'z' 	: sbf(gi).z(ai) 	= veluga->g_sbf(ldum.z, dsize, ['z'])
-						'nuv' 	: sbf(gi).nuv(ai) = veluga->g_sbf(ldum.nuv, dsize, ['nuv'])
-						'NUV' 	: sbf(gi).nuv(ai) = veluga->g_sbf(ldum.nuv, dsize, ['nuv'])
+						'u' 	: sbf(gi).u(ai) 	= veluga->g_sbf(ldum2.u, dsize, ['u'])
+						'g' 	: sbf(gi).g(ai) 	= veluga->g_sbf(ldum2.g, dsize, ['g'])
+						'r' 	: sbf(gi).r(ai) 	= veluga->g_sbf(ldum2.r, dsize, ['r'])
+						'i' 	: sbf(gi).i(ai) 	= veluga->g_sbf(ldum2.i, dsize, ['i'])
+						'z' 	: sbf(gi).z(ai) 	= veluga->g_sbf(ldum2.z, dsize, ['z'])
+						'nuv' 	: sbf(gi).nuv(ai) = veluga->g_sbf(ldum2.nuv, dsize, ['nuv'])
+						'NUV' 	: sbf(gi).nuv(ai) = veluga->g_sbf(ldum2.nuv, dsize, ['nuv'])
 					ENDCASE
 				ENDFOR
 

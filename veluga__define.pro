@@ -18,7 +18,7 @@ END
 FUNCTION veluga::allocate, nn, type=type
 
 	CASE type OF
-		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
+		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
 		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d}, nn)
 		ELSE: STOP
 	ENDCASE
@@ -30,7 +30,7 @@ PRO veluga::rdheader, fname
 
 	FINDPRO, 'veluga__define', dirlist=dirlist, /noprint
 	
-	settings 	= {header:'^^', dir_lib:dirlist(0), num_thread:1L, $
+	settings 	= {header:'^^', dir_lib:dirlist(0), num_thread:1L, sun_met:0.d, $
 		erg_msg_i:'%123123----- VELUGA -----', erg_msg_f:'%123123----------', erg_msg_0:' ', $
 		pp_msg_i:'%123123----- VELUGA (Post processing) -----', pp_msg_f:'%123123----------', pp_msg_0:' '}
 
@@ -53,6 +53,7 @@ PRO veluga::rdheader, fname
 	ENDFOR
 	CLOSE, 10
 	settings.num_thread	= self.num_thread
+	settings.sun_met	= 0.02d
 
 	(*self.header)	= settings
 END
@@ -166,24 +167,24 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	;; Initial cut (Not implemented Yet)
 	;;-----
 	IF id0 LT 0L THEN BEGIN 
-;		IF KEYWORD_SET(masscut) THEN BEGIN
-;			IF horg EQ 'g' THEN $
-;				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
-;			IF horg EQ 'h' THEN $
-;				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
-;
-;			IF nn EQ 0L THEN BEGIN
-;				PRINT, '%123123-----'
-;				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
-;				PRINT, '	(CONVERT TO READING ALL GALS'
-;
-;				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
-;			ENDIF
-;			n_gal	= nn
-;		ENDIF ELSE BEGIN
+	;		IF KEYWORD_SET(masscut) THEN BEGIN
+	;			IF horg EQ 'g' THEN $
+	;				mcut	= WHERE(mass_tot GE masscut(0) AND mass_tot LT masscut(1), nn)
+	;			IF horg EQ 'h' THEN $
+	;				mcut	= WHERE(mvir GE masscut(0) AND mvir LT masscut(1), nn)
+	;
+	;			IF nn EQ 0L THEN BEGIN
+	;				PRINT, '%123123-----'
+	;				PRINT, '	NO GALAXIES (HALOS) WITHIN THE MASS LIMIT'
+	;				PRINT, '	(CONVERT TO READING ALL GALS'
+	;
+	;				mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
+	;			ENDIF
+	;			n_gal	= nn
+	;		ENDIF ELSE BEGIN
 			mcut	= WHERE(mvir GE 0. AND mvir LT 1e20, nn)
 			n_gal	= nn
-;		ENDELSE
+	;		ENDELSE
 	ENDIF ELSE BEGIN
 		mcut	= WHERE(ID EQ id0, nn)
 		n_gal	= nn
@@ -248,10 +249,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg
 	RETURN, GP
 END
 
-FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
+FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 
 	;;-----
-	;; READ MEMBER PTCL
+	;; READ MEMBER Part
 	;;	/simout 	- output as the simulation raw unit
 	;;-----
 	IF ~KEYWORD_SET(horg) THEN horg='g'
@@ -293,7 +294,7 @@ FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
 	;; POST PROCESSING
 	cut	= WHERE(pinfo(*,0) gt -1.0d7, ncut)
 	IF MAX(cut) LT 0 THEN BEGIN
-		self->errorout, '		r_ptcl: NO MATCHED PTCLs'
+		self->errorout, '		r_part: NO MATCHED PTCLs'
 		RETURN, -1.
 	ENDIF
 
@@ -317,15 +318,15 @@ FUNCTION veluga::r_ptcl, snap0, id0, horg=horg, simout=simout
 	output.id 	= pid(cut)
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
-		output.xx 	*= (info.unit_l/3.086e21)
-		output.yy 	*= (info.unit_l/3.086e21)
-		output.zz 	*= (info.unit_l/3.086e21)
+		output.xx 	*= (info.unit_l/info.cgs.kpc)
+		output.yy 	*= (info.unit_l/info.cgs.kpc)
+		output.zz 	*= (info.unit_l/info.cgs.kpc)
 
 		output.vx 	*= (info.kms)
 		output.vy 	*= (info.kms)
 		output.vz 	*= (info.kms)
 
-		output.mp 	*= (info.unit_m / 1.98892d33)
+		output.mp 	*= (info.unit_m / info.cgs.m_sun)
 	ENDIF
 
 	RETURN, output
@@ -552,6 +553,31 @@ PRO veluga::g_makearr, array, input, index, unitsize=unitsize, type=type
 	
 	index = n1 + 1L
 END
+
+FUNCTION veluga::g_boundind, x, y, z, xr=xr, yr=yr, zr=zr
+	;;-----
+	;; Return index within a box
+	;;-----
+
+	tmp 	= 'ind = WHERE('
+
+	IF KEYWORD_SET(xr) THEN BEGIN
+		tmp += 'x GE xr(0) AND x LT xr(1) '
+	ENDIF
+
+	IF KEYWORD_SET(yr) THEN BEGIN
+		tmp += 'AND y GE yr(0) AND y LT yr(1) '
+	ENDIF
+
+	IF KEYWORD_SET(zr) THEN BEGIN
+		tmp += 'AND z GE zr(0) AND z LT zr(1) '
+	ENDIF
+	tmp     += ')'
+	void    = EXECUTE(tmp)
+
+	RETURN, ind
+END
+
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
@@ -594,7 +620,7 @@ FUNCTION veluga::g_info, snap0
 	CLOSE, 2
 
 	;; unit in cgs
-	kpc     = 3.08568025e21
+	kpc     = 3.086d21;3.08568025e21
 	twopi   = 6.2831853d0
 	hplanck = 6.6262000d-27
 	eV      = 1.6022000d-12
@@ -607,7 +633,7 @@ FUNCTION veluga::g_info, snap0
 	mH      = 1.6600000d-24
 	mu_mol  = 1.2195d0
 	G       = 6.67259e-8
-	m_sun   = 1.98892e33
+	m_sun   = 1.98892d33
 
 	cgs 	= {kpc:kpc, hplanck:hplanck, eV:eV, kB:kB, clight:clight, Gyr:Gyr, mH:mH, G:G, m_sun:m_sun}
 
@@ -623,7 +649,7 @@ FUNCTION veluga::g_info, snap0
 	scale_T2   = mH/kB * scale_v^2.
 	scale_nH   = X/mH * scale_d
 	;; scale covert mettalicty into solar metallicity Z_sol = 0.02
-	scale_Z    = 1./0.02 
+	scale_Z    = 1./settings.sun_met 
 	scale_flux = scale_v*scale_d*kpc*kpc*Gyr/m_sun
   
 	info={cgs:cgs, boxtokpc:my_rarr(0)*scale_l/kpc,tGyr:my_rarr(1)*scale_t/Gyr,boxlen:my_rarr(0),levmin:my_narr(2),levmax:my_narr(3),unit_l:scale_l,unit_d:scale_d,unit_t:scale_t,unit_m:scale_m,unit_v:scale_v,unit_nH:scale_nH,unit_T2:scale_T2,unit_Z:scale_Z,kms:scale_v/1d5,unit_flux:scale_d*scale_v*(1e-9*Gyr)*(kpc)*(kpc)/m_sun,aexp:my_rarr(2), H0:my_rarr(3), omega_m:my_rarr(4), omega_l:my_rarr(5), omega_k:my_rarr(6), omega_b:my_rarr(7), ncpu:my_narr(0), ndim:my_narr(1)}
@@ -663,12 +689,13 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 
 	IF N_ELEMENTS(xc2) NE N_ELEMENTS(rr2) THEN rr2 = xc2*0.d + MAX(rr2)
 
-	xc 	= DOUBLE(xc2)*3.086e21 / info.unit_l
-	yc 	= DOUBLE(yc2)*3.086e21 / info.unit_l
-	zc 	= DOUBLE(zc2)*3.086e21 / info.unit_l
-	rr 	= DOUBLE(rr2)*3.086e21 / info.unit_l
+	xc 	= DOUBLE(xc2)*info.cgs.kpc / info.unit_l
+	yc 	= DOUBLE(yc2)*info.cgs.kpc / info.unit_l
+	zc 	= DOUBLE(zc2)*info.cgs.kpc / info.unit_l
+	rr 	= DOUBLE(rr2)*info.cgs.kpc / info.unit_l
 
-	dom_list 	= LONARR(n_gal, n_mpi)
+	dom_list 	= LONARR(n_gal, n_mpi) - 1L
+
 
 	ftr_name 	= settings.dir_lib + 'src/fortran/find_domain.so'
 		larr = LONARR(20) & darr = DBLARR(20)
@@ -704,7 +731,7 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	ENDELSE
 END
 
-FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
 
 	;;-----
 	;; Read Particle within a sphere
@@ -804,15 +831,15 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	part.id 	= id
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
-		part.xx 	*= (info.unit_l/3.086e21)	;; [kpc]
-		part.yy 	*= (info.unit_l/3.086e21)
-		part.zz 	*= (info.unit_l/3.086e21)
+		part.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		part.yy 	*= (info.unit_l/info.cgs.kpc)
+		part.zz 	*= (info.unit_l/info.cgs.kpc)
 
 		part.vx 	*= info.kms
 		part.vy 	*= info.kms
 		part.vz 	*= info.kms
 
-		part.mp 	*= (info.unit_m / 1.98892d33)
+		part.mp 	*= (info.unit_m / info.cgs.m_sun)
 
 	ENDIF
 
@@ -822,7 +849,7 @@ FUNCTION veluga::g_part, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
 
 	;;-----
 	;; Read AMR cells within a sphere
@@ -841,10 +868,10 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	ncpu 	= N_ELEMENTS(dom_list)
 	dir 	= settings.dir_raw + 'output_' + STRING(snap0, format='(I5.5)')
 
-	xc	= xc2 / info.unit_l * 3.086d21
-	yc	= yc2 / info.unit_l * 3.086d21
-	zc	= zc2 / info.unit_l * 3.086d21
-	rr	= rr2 / info.unit_l * 3.086d21
+	xc	= xc2 / info.unit_l * info.cgs.kpc
+	yc	= yc2 / info.unit_l * info.cgs.kpc
+	zc	= zc2 / info.unit_l * info.cgs.kpc
+	rr	= rr2 / info.unit_l * info.cgs.kpc
 
 	IF ~KEYWORD_SET(xr) OR ~KEYWORD_SET(yr) OR ~KEYWORD_SET(zr) THEN BEGIN
 		xr	= [-1d,1d] * rr + xc
@@ -909,6 +936,7 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 	;;-----
 	;; POST PROCESSING
 	;;-----
+
 	cut	= WHERE(mesh_lv GE 0L,ncell)
 	cell 	= self->allocate(ncell, type='cell')
 
@@ -937,16 +965,16 @@ FUNCTION veluga::g_cell, xc2, yc2, zc2, rr2, snap0, dom_list=dom_list, simout=si
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
 
-		cell.xx 	*= (info.unit_l/3.086e21)	;; [kpc]
-		cell.yy 	*= (info.unit_l/3.086e21)
-		cell.zz 	*= (info.unit_l/3.086e21)
+		cell.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		cell.yy 	*= (info.unit_l/info.cgs.kpc)
+		cell.zz 	*= (info.unit_l/info.cgs.kpc)
 
 		cell.vx 	*= info.kms					;; [km/s]
 		cell.vy 	*= info.kms
 		cell.vz 	*= info.kms
 
-		cell.dx 	*= (info.unit_l/3.086e21)	;; [kpc]
-		cell.mp 	= mesh_hd(*,0) * info.unit_d * (mesh_dx*info.unit_l)^3.d / 1.98892d33 	;; [Msun]
+		cell.dx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		cell.mp 	= mesh_hd(*,0) * info.unit_d * (mesh_dx*info.unit_l)^3.d / info.cgs.m_sun 	;; [Msun]
 
 		cell.den 	*= (info.unit_nH)			;; [/cc]
 		cell.temp 	*= (1.d/mesh_hd(*,0) * info.unit_T2)	;; [K/mu]
@@ -985,7 +1013,7 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	;;-----
 	;; Read all ptcls
 	;;-----
-	part 	= self->g_part(0.d, 0.d, 0.d, 0.d, snap0, dom_list=dom_all)
+	part 	= self->g_part(snap0, 0.d, 0.d, 0.d, 0.d, dom_list=dom_all)
 
 	dm_ind 	= WHERE(part.family EQ 1L, nn_dm)
 	part 	= part(dm_ind)
@@ -1171,11 +1199,15 @@ FUNCTION veluga::g_luminosity, mp, ap, zp, band
 			cut 	= WHERE(age_ind EQ -1L AND age_arr - ref_age(j) LT 0., ncut)
 			IF ncut GE 1L THEN age_ind(cut)	= j-1
 		ENDFOR
+		cut 	= WHERE(age_arr GT MAX(ref_age), ncut)
+		IF ncut GE 1L THEN age_ind(cut) = N_ELEMENTS(ref_age)-2L
 
 		FOR j=1L, N_ELEMENTS(ref_met)-1L DO BEGIN
 			cut 	= WHERE(met_ind EQ -1L AND met_arr - ref_met(j) LT 0., ncut)
 			IF ncut GE 1L THEN met_ind(cut)	= j-1
 		ENDFOR
+		cut 	= WHERE(met_arr GT MAX(ref_met), ncut)
+		IF ncut GE 1L THEN met_ind(cut) = N_ELEMENTS(ref_met)-2L
 
 		z00 	= ref_ml(age_ind, met_ind)
 		z01 	= ref_ml(age_ind, met_ind+1L)
@@ -1310,7 +1342,7 @@ PRO veluga::g_potential, cell, part, $
 	;; Compute potential
 	;;-----
 	Gconst 		= 6.67408d-11 		;; m^3 kg^-1 s^-2
-	mtokpc 		= (1./3.086d19)
+	mtokpc 		= (1./ 3.086d19)
 	kgtoMsun 	= (1./1.98892d30)
 	Gconst 		*= (mtoKpc / kgtoMsun * 1d-6)	;; (km/s)^2 Kpc/Msun
 
@@ -1486,7 +1518,7 @@ PRO veluga::t_miles_sdss
 
 	tbl 	= REPLICATE({age:0.d, metal:0.d, mass:0.d, u:0.d, g:0.d, r:0.d, i:0.d, z:0.d}, N_ELEMENTS(metal))
 	tbl.age 	= age
-	tbl.metal 	= (10.^metal)*0.02
+	tbl.metal 	= (10.^metal)*settings.sun_met
 	tbl.u 		= u2
 	tbl.g 		= g2
 	tbl.r 		= r2
@@ -1572,7 +1604,7 @@ PRO veluga::t_miles_galex
 	tbl 	= REPLICATE({age:0.d, metal:0.d, mass:0.d, nuv:0.d}, N_ELEMENTS(metal))
 
 	tbl.age 	= age
-	tbl.metal 	= (10.^metal)*0.02
+	tbl.metal 	= (10.^metal)*settings.sun_met
 	tbl.nuv 	= nuv2
 
 	age_arr		= self->g_unique(tbl.age)
