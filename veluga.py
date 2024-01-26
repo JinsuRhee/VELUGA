@@ -18,6 +18,7 @@ import scipy.integrate as integrate
 
 from src.fortran.get_ptcl_py import get_ptcl_py
 from src.fortran.get_cell_py import get_cell_py
+from src.fortran.get_amr_py import get_amr_py
 from src.fortran.find_domain_py import find_domain_py
 
 
@@ -117,6 +118,15 @@ class veluga:
 		ramobj.levmax = np.int32(info['levmax'])
 		ramobj.dir_raw = self.header.dir_raw.ljust(1000)
 
+	def ramses_amr_input(self, ramobj):
+
+		info = self.g_info(1)
+
+		ramobj.n_thread = np.int32(self.num_thread)
+		ramobj.n_mpi = np.int32(self.header.ndomain)
+		ramobj.n_dim = np.int32(3)
+		ramobj.levmax = np.int32(info['levmax'])
+		ramobj.dir_raw = self.header.dir_raw.ljust(1000)
 
 ##-----
 ## GET FTNS
@@ -344,7 +354,7 @@ class veluga:
 		info = self.g_info(n_snap)
 		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
 
-		if(dom_list == None):
+		if(dom_list is None):
 			dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
 			x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
 			y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
@@ -418,7 +428,7 @@ class veluga:
 		info = self.g_info(n_snap)
 		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
 
-		if(dom_list == None):
+		if(dom_list is None):
 			dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
 			x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
 			y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
@@ -480,6 +490,68 @@ class veluga:
 			cell['temp']*= info['unit_T2'] 		# [K/mu]
 
 		
+
+		return cell
+
+	##-----
+	## Get AMR within a volume dl^3 centered at (x0, y0, z0)
+	##	output includes x, y, z, dx (not hydro variables)
+	##	active for non-hydro runs
+	##  x0, y0, z0, dl should be given in pKpc unit
+	##
+	##
+	##	if dom_list is given as an numpy integer array, it overwries the domain found with the given volume and return all cells in the argued domain
+	##-----
+	def g_amr(self, n_snap, x0, y0, z0, dl, dom_list=None, g_simunit=False):
+
+		##----- Initial Settings
+
+		info = self.g_info(n_snap)
+		dmp_mass    = 1.0/(self.header.neff*self.header.neff*self.header.neff)*(info['oM'] - info['oB'])/info['oM']
+
+		if(dom_list is None):
+			dom_list = self.g_domain(n_snap, x0, y0, z0, dl)
+			x0_s = np.double(x0 * (info['cgs']['kpc'] / info['unit_l']))
+			y0_s = np.double(y0 * (info['cgs']['kpc'] / info['unit_l']))
+			z0_s = np.double(z0 * (info['cgs']['kpc'] / info['unit_l']))
+			dl_s = np.double(dl * (info['cgs']['kpc'] / info['unit_l']))
+		else:
+			dom_list = np.int32(dom_list)
+			x0_s = np.double(0.5)
+			y0_s = np.double(0.5)
+			z0_s = np.double(0.5)
+			z0_s = np.double(0.5)
+			dl_s = np.double(1e8)
+
+		##----- Fortran Settigns
+		self.ramses_amr_input(get_amr_py)
+
+		
+
+		##----- Get cell by Fortran
+		get_amr_py.get_amr_box(n_snap, x0_s, y0_s, z0_s, dl_s, dom_list)
+
+
+		##----- Allocate
+		n_cell = np.size(get_amr_py.p_dbl[:,0])
+		cell 	= self.allocate(n_cell, type='cell')
+
+		##----- Get Hydro descriptor
+		cell['xx'] 	= get_amr_py.p_dbl[:,0]
+		cell['yy'] 	= get_amr_py.p_dbl[:,1]
+		cell['zz'] 	= get_amr_py.p_dbl[:,2]
+		cell['dx'] 	= get_amr_py.p_dbl[:,3]
+		cell['level'] = get_amr_py.p_int[:,0]
+
+		##----- Memory free
+		get_amr_py.get_amr_deallocate()
+
+		
+		if(g_simunit==False):
+			cell['xx'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['yy'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['zz'] 	*= (info['unit_l'] / info['cgs']['kpc'])
+			cell['dx']	*= (info['unit_l'] / info['cgs']['kpc'])
 
 		return cell
 ##-----
