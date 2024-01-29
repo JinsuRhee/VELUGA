@@ -16,10 +16,10 @@ from scipy.io import FortranFile
 import scipy.integrate as integrate
 
 
-from src.fortran.get_ptcl_py import get_ptcl_py
-from src.fortran.get_cell_py import get_cell_py
-from src.fortran.get_amr_py import get_amr_py
-from src.fortran.find_domain_py import find_domain_py
+from .src.fortran.get_ptcl_py import get_ptcl_py
+from .src.fortran.get_cell_py import get_cell_py
+from .src.fortran.get_amr_py import get_amr_py
+from .src.fortran.find_domain_py import find_domain_py
 
 
 class veluga:
