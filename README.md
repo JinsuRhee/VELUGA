@@ -1,3 +1,5 @@
+![VELUGA_logo](https://github.com/JinsuRhee/VELUGA/assets/41977039/eebba804-818d-495a-b9e2-8f380918f902)
+
 # VELUGA
 VELociraptor Utilities for Galaxy Analysis for IDL and Python languages
 VELUGA provides
