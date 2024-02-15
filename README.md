@@ -1,6 +1,6 @@
+<img src="https://github.com/JinsuRhee/VELUGA/assets/41977039/eebba804-818d-495a-b9e2-8f380918f902" width="300" height="300" >
 
-
-<img src="https://github.com/JinsuRhee/VELUGA/assets/41977039/eebba804-818d-495a-b9e2-8f380918f902" width="300" height="300" > # VELUGA
+# VELUGA
 VELociraptor Utilities for Galaxy Analysis for IDL and Python languages
 VELUGA provides
 1) post-processing routine for the VELOCIraptor output, which computes galaxy bulk properties, builds merger trees, and so on.
