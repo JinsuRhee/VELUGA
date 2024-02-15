@@ -1,4 +1,4 @@
-<img src="https://github.com/JinsuRhee/VELUGA/assets/41977039/eebba804-818d-495a-b9e2-8f380918f902" width="300" height="300">
+<style "float:left"><img src="https://github.com/JinsuRhee/VELUGA/assets/41977039/eebba804-818d-495a-b9e2-8f380918f902" width="300" height="300" ></style>
 
 # VELUGA
 VELociraptor Utilities for Galaxy Analysis for IDL and Python languages
