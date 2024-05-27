@@ -445,7 +445,7 @@ FUNCTION veluga::r_evol, snap0, id0, horg=horg
 	tree 	= self->r_tree(snap0, id0, horg=horg)
 	
 	IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
-		self->errout, 'No tree data exists for ' + horg
+		self->errorout, 'No tree data exists for ' + horg
 		RETURN, 1L
 	ENDIF
 
@@ -600,6 +600,12 @@ FUNCTION veluga::g_rotate, x, y, z, axis
 	;vz0 	= v * rvec_z(0) + v * rvec_z(1) + v * rvec_z(2)
 
 	RETURN, {x:xx0, y:yy0, z:zz0}
+END
+
+FUNCTION veluga::g_boundind, array, range
+
+	ind	= WHERE(array GE range(0) AND array LT range(1), nind)
+	RETURN, {ind:ind, n:nind}
 END
 ;;-----
 ;; SIMPLE GET FTNS
@@ -1414,6 +1420,10 @@ FUNCTION veluga::d_minmax, map2, min2, max2, stype=stype, loga=loga
 			map 	= ALOG10(map + 1.d)
 			min 	= ALOG10(loga*min2 + 1.d)
 			max 	= ALOG10(loga*max2 + 1.d)
+			END
+		'lin' : BEGIN
+			min = min2 & max = max2
+
 			END
 	ENDCASE
 
