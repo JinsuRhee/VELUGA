@@ -445,7 +445,7 @@ FUNCTION veluga::r_evol, snap0, id0, horg=horg
 	tree 	= self->r_tree(snap0, id0, horg=horg)
 	
 	IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
-		self->errout, 'No tree data exists for ' + horg
+		self->errorout, 'No tree data exists for ' + horg
 		RETURN, 1L
 	ENDIF
 
@@ -463,6 +463,7 @@ FUNCTION veluga::r_evol, snap0, id0, horg=horg
 
 	RETURN, g
 END
+
 ;;-----
 ;; SIMPLE GET FTNS
 ;;-----
@@ -578,6 +579,34 @@ FUNCTION veluga::g_boundind, x, y, z, xr=xr, yr=yr, zr=zr
 	RETURN, ind
 END
 
+FUNCTION veluga::g_rotate, x, y, z, axis
+
+	;;-----
+	;; Rotate coordinate systems for axis to be z-axis
+	;;
+	;; If angular momentum is given, (x,y) is face-on and (x,z) or (y,z) are edge-on views
+	;;-----
+
+	rvec_z 	= axis / NORM(axis)
+	const 	= SQRT( (1. - rvec_z(0)^2 - rvec_z(1)^2) / (1. - rvec_z(1)^2) )
+	rvec_x 	= [const, 0., SQRT(1. - const^2)]
+	rvec_y 	= CROSSP(rvec_z, rvec_x)
+
+	xx0 	= x * rvec_x(0) + y * rvec_x(1) + z * rvec_x(2)
+	yy0 	= x * rvec_y(0) + y * rvec_y(1) + z * rvec_y(2)
+	zz0 	= x * rvec_z(0) + y * rvec_z(1) + z * rvec_z(2)
+	;vx0 	= v * rvec_x(0) + v * rvec_x(1) + v * rvec_x(2)
+	;vy0 	= v * rvec_y(0) + v * rvec_y(1) + v * rvec_y(2)
+	;vz0 	= v * rvec_z(0) + v * rvec_z(1) + v * rvec_z(2)
+
+	RETURN, {x:xx0, y:yy0, z:zz0}
+END
+
+FUNCTION veluga::g_boundind, array, range
+
+	ind	= WHERE(array GE range(0) AND array LT range(1), nind)
+	RETURN, {ind:ind, n:nind}
+END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
@@ -1371,6 +1400,232 @@ PRO veluga::g_potential, cell, part, $
 	RETURN
 END
 
+
+;;-----
+;; DRAWING ROUTINES
+;;-----
+FUNCTION veluga::d_minmax, map2, min2, max2, stype=stype, loga=loga
+	map 	= map2
+
+	IF ~KEYWORD_SET(stype) THEN stype = 'log'
+	IF ~KEYWORD_SET(loga) THEN loga = 1000.d
+
+	CASE stype OF
+		'log' : BEGIN
+			map 	= ALOG(loga*map + 1.d) / ALOG(loga)
+			min 	= ALOG(loga*min2 + 1.d) / ALOG(loga)
+			max 	= ALOG(loga*max2 + 1.d) / ALOG(loga)
+			END
+		'log2' : BEGIN
+			map 	= ALOG10(map + 1.d)
+			min 	= ALOG10(loga*min2 + 1.d)
+			max 	= ALOG10(loga*max2 + 1.d)
+			END
+		'lin' : BEGIN
+			min = min2 & max = max2
+
+			END
+	ENDCASE
+
+	cut 	= WHERE(map LT min, ncut)
+	IF ncut GE 1L THEN map(cut) = 0.
+
+	cut 	= WHERE(map GT 0.)
+	map(cut)-= min
+
+	cut 	= WHERE(map GT max-min, ncut)
+	IF ncut GE 1L THEN map(cut) = max-min
+
+	map 	= map / (max - min)
+
+	RETURN, map
+
+END
+
+
+FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, kernel=kernel, bandwidth=bandwidth, bintype=bintype
+	;;-----
+	;; Get 2d map
+	;;
+	;;	mode: [1] integer
+	;;		positive (>0) gives denstiy at each point
+	;;		negative (<0) gives density at each grid
+	;;
+	;;	kernel: [1] integer
+	;;		0 - 2D histogram
+	;;		1 - Gaussian kernel
+	;;		2 - Triangular kernel (not implemented)
+	;;		3 - p^3M (not implemented)
+	;;
+	;;	bintype: [1] string
+	;;		binning scheme
+	;;		'NGP' or 'CIC'
+	;;
+	;;	bandwidth: [2] single / double
+	;;		kernel size
+	;;		if not set, a pixel size used
+	;;-----
+
+
+
+	;;-----
+	;; Initial settings
+	;;-----
+	IF ~KEYWORD_SET(zz) THEN zz = xx*0.d + 1.d
+	IF ~KEYWORD_SET(n_pix) THEN n_pix = 1000L
+	IF ~KEYWORD_SET(mode) THEN mode = -1L
+	IF ~KEYWORD_SET(kernel) THEN kernel = 1L
+	IF ~KEYWORD_SET(bandwidth) THEN bandwidth = [xr(1)-xr(0), yr(1)-yr(0)]/n_pix
+	IF ~KEYWORD_SET(bintype) THEN bintype = 'NGP'
+
+	xx = DOUBLE(xx) & yy = DOUBLE(yy) & zz = DOUBLE(zz)
+	xr = DOUBLE(xr) & yr = DOUBLE(yr) & n_pix = LONG(n_pix)
+
+	n_dim = 2L
+	hmat 	= DBLARR(2,2)
+	hmat(0,0)	= bandwidth(0)^2
+	hmat(1,1) 	= bandwidth(1)^2
+	ihmat 	= INVERT(hmat)
+	const 	= DOUBLE(DETERM(hmat)^(-0.5))*(!pi*2.)^(-n_dim/2.)
+
+	settings	= self->getheader()
+
+	;;-----
+	;; Range cut
+	;;-----
+	cut 	= WHERE(xx GE xr(0) AND xx LE xr(1) AND yy GE yr(0) AND yy LE yr(1), ncut)
+	IF ncut EQ 0L THEN BEGIN
+		self->errorout, 'NO DATA ARE LEFT WITH THE GIVEN RANGES'
+		RETURN, -1
+	ENDIF
+
+	dx = xx(cut) & dy = yy(cut) & dz = zz(cut)
+
+	;;-----
+	;; Compute
+	;;-----
+	density 	= FLTARR(n_pix, n_pix)
+	;ptcl 		= FLTARR(n_pix)
+
+	IF KERNEL EQ 0L THEN BEGIN ;; 2D histogram
+		ftr_name 	= settings.dir_lib + '/src/fortran/js_kde_2dhisto.so'
+			larr = LONARR(20)
+			larr(0) = N_ELEMENTS(dx)
+			larr(1) = settings.num_thread
+			larr(2) = n_pix
+
+		void = CALL_EXTERNAL(ftr_name, 'js_kde_2dhisto', dx, dy, dz, density, ptcl, xr, yr, larr)
+	ENDIF ELSE IF kernel EQ 1L THEN BEGIN ;; Gaussian Kernel
+
+		;;----- Binning
+		grid2 	= DBLARR(n_pix*2, n_pix*2)
+
+		ftr_name 	= settings.dir_lib + '/src/fortran/js_kde_gauss_binning.so'
+			larr= LONARR(20)
+			larr(0) = N_ELEMENTS(dx)
+			larr(1) = settings.num_thread
+			larr(2) = n_pix
+
+			IF bintype EQ 'NGP' THEN larr(3) = 1L
+			IF bintype EQ 'CIC' THEN larr(3) = 2L
+
+			larr(4) = 1L
+
+		void 	= CALL_EXTERNAL(ftr_name, 'js_kde_gauss_binning', $
+			dx, dy, dz, xr, yr, grid2, larr)
+
+		gridorg 	= grid2
+
+		;;----- Kernel Matrix
+		delX 	= (xr(1)-xr(0))/n_pix
+		delY 	= (yr(1)-yr(0))/n_pix
+
+		grid_ker	= DBLARR(n_pix*2., n_pix*2.)
+
+		ix 	= DINDGEN(n_pix*2) + 0.5
+		iy 	= DINDGEN(n_pix*2) + 0.5
+
+		ix 	= REBIN(ix, n_pix*2, n_pix*2)
+		iy 	= REBIN(TRANSPOSE(iy), n_pix*2, n_pix*2)
+
+		ix 	= (n_pix - 0.5)*delX - ix * delX
+		iy 	= (n_pix - 0.5)*delY - iy * delY
+
+		dum_ker 	= -0.5*(ihmat(0,0) * ix^2 + ihmat(1,1) * iy^2 + $
+			(ihmat(0,1) + ihmat(1,0))*ABS(ix)*ABS(iy))
+
+		avoid 	= WHERE(dum_ker GT -700.0, nn)
+		IF nn EQ 0L THEN BEGIN 
+			PRINT, '?' 
+			STOP
+		ENDIF
+
+		grid_ker(avoid) 	= EXP(dum_ker(avoid))*const
+
+		;;----- Convolution
+		ift_bin 	= FFT(grid2, /DOUBLE)
+		ift_ker		= FFT(grid_ker, /DOUBLE)
+
+		ift_conv 	= ift_bin * ift_ker
+		grid 	= FFT(ift_conv, /DOUBLE, /inverse)
+		grid 	= DOUBLE(REAL_PART(grid))
+		grid2 = 0. & grid_ker = 0. & ift_bin = 0. & ift_ker = 0. & ix = 0. & iy = 0.
+
+		;;----- Adjust
+		grid2 	= grid
+		grid(*, 0:n_pix-1L) 	= grid2(*,n_pix:*)
+		grid(*,n_pix:*)			= grid2(*,0:n_pix-1L)
+
+		grid2 	= grid
+		grid(0:n_pix-1L,*) 		= grid2(n_pix:*,*)
+		grid(n_pix:*,*)			= grid2(0:n_pix-1L,*)
+
+		grid 	= grid(n_pix/2-1:n_pix/2+n_pix-2,n_pix/2-1:n_pix/2+n_pix-2)
+		density 	= grid
+
+		grid 	= 0.
+
+		IF mode GT 0. THEN BEGIN
+			PRINT, 'interpolation'
+
+			ptcl 	= DBLARR(N_ELEMETNS(dx))
+
+			ftr_name	= settings.dir_lib + '/src/fortran/js_kde_gauss_pts.so'
+				larr= LONARR(20)
+				larr(0) = N_ELEMENTS(dx)
+				larr(1) = settings.num_thread
+				larr(2) = n_pix
+
+			void 	= CALL_EXTERNAL(ftr_name, 'js_kde_gauss_pts', $
+				dx, dy, dz, xr, yr, density, ptcl, larr)
+		ENDIF
+	ENDIF
+
+	;;-----
+	;; RETURN
+	;;-----
+
+	IF mode GT 0L THEN BEGIN
+		ptcl 	= ptcl / TOTAL(ptcl) * TOTAL(dz)
+		RETURN, {x:dx, y:dy, z:ptcl}
+	ENDIF ELSE BEGIN
+		delx 	= (xr(1)-xr(0))/n_pix
+		dely 	= (yr(1)-yr(0))/n_pix
+
+		ix 	= FINDGEN(n_pix) + 0.5
+		iy 	= FINDGEN(n_pix) + 0.5
+		ix 	= REBIN(ix, n_pix, n_pix)
+		iy 	= REBIN(TRANSPOSE(iy), n_pix, n_pix)
+		ix 	= ix*delx + xr(0)
+		iy 	= iy*dely + yr(0)
+
+		cut_neg 	= WHERE(density LT 0., ncut)
+		IF ncut GE 1L THEN density(cut_neg) = 0.d
+
+		density 	= density / TOTAL(density) * TOTAL(dz)
+		RETURN, {x:ix, y:iy, z:density}
+	ENDELSE
+END
 
 
 ;;-----

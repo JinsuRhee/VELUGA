@@ -44,4 +44,16 @@ gcc -fopenmp -fPIC -c prop_sfr_c2f.c -o prop_sfr_c2f.o
 gcc -shared -fopenmp prop_sfr.o prop_sfr_c2f.o -o prop_sfr.so
 chmod 777 *.o *.so
 
+gfortran -fopenmp -fPIC -mcmodel=large -c js_kde_2dhisto.f90 -o js_kde_2dhisto.o
+gcc -fopenmp -fPIC -mcmodel=large -c js_kde_2dhisto_c2f.c -o js_kde_2dhisto_c2f.o
+gcc -shared -fopenmp -mcmodel=large js_kde_2dhisto.o js_kde_2dhisto_c2f.o -o js_kde_2dhisto.so -lgfortran
+
+gfortran -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_binning.f90 -o js_kde_gauss_binning.o
+gcc -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_binning_c2f.c -o js_kde_gauss_binning_c2f.o
+gcc -shared -fopenmp -mcmodel=large js_kde_gauss_binning.o js_kde_gauss_binning_c2f.o -o js_kde_gauss_binning.so -lgfortran
+
+gfortran -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_pts.f90 -o js_kde_gauss_pts.o
+gcc -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_pts_c2f.c -o js_kde_gauss_pts_c2f.o
+gcc -shared -fopenmp -mcmodel=large js_kde_gauss_pts.o js_kde_gauss_pts_c2f.o -o js_kde_gauss_pts.so -lgfortran
+
 
