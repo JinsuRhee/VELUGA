@@ -19,7 +19,7 @@ FUNCTION veluga::allocate, nn, type=type
 
 	CASE type OF
 		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
-		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d}, nn)
+		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d}, nn)
 		ELSE: STOP
 	ENDCASE
 END
@@ -555,29 +555,6 @@ PRO veluga::g_makearr, array, input, index, unitsize=unitsize, type=type
 	index = n1 + 1L
 END
 
-FUNCTION veluga::g_boundind, x, y, z, xr=xr, yr=yr, zr=zr
-	;;-----
-	;; Return index within a box
-	;;-----
-
-	tmp 	= 'ind = WHERE('
-
-	IF KEYWORD_SET(xr) THEN BEGIN
-		tmp += 'x GE xr(0) AND x LT xr(1) '
-	ENDIF
-
-	IF KEYWORD_SET(yr) THEN BEGIN
-		tmp += 'AND y GE yr(0) AND y LT yr(1) '
-	ENDIF
-
-	IF KEYWORD_SET(zr) THEN BEGIN
-		tmp += 'AND z GE zr(0) AND z LT zr(1) '
-	ENDIF
-	tmp     += ')'
-	void    = EXECUTE(tmp)
-
-	RETURN, ind
-END
 
 FUNCTION veluga::g_rotate, x, y, z, axis
 
@@ -602,10 +579,24 @@ FUNCTION veluga::g_rotate, x, y, z, axis
 	RETURN, {x:xx0, y:yy0, z:zz0}
 END
 
-FUNCTION veluga::g_boundind, array, range
+FUNCTION veluga::g_boundind, xx=x, yy=y, zz=z, xr=xr, yr=yr, zr=zr
+	tmp 	= 'ind = WHERE('
 
-	ind	= WHERE(array GE range(0) AND array LT range(1), nind)
-	RETURN, {ind:ind, n:nind}
+	IF KEYWORD_SET(xr) THEN BEGIN
+		tmp += 'x GE xr(0) AND x LT xr(1) '
+	ENDIF
+
+	IF KEYWORD_SET(yr) THEN BEGIN
+		tmp += 'AND y GE yr(0) AND y LT yr(1) '
+	ENDIF
+
+	IF KEYWORD_SET(zr) THEN BEGIN
+		tmp += 'AND z GE zr(0) AND z LT zr(1) '
+	ENDIF
+	tmp     += ', nn)'
+	void    = EXECUTE(tmp)
+
+	RETURN, {ind:ind, n:nn}
 END
 ;;-----
 ;; SIMPLE GET FTNS
@@ -725,7 +716,6 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 
 	dom_list 	= LONARR(n_gal, n_mpi) - 1L
 
-
 	ftr_name 	= settings.dir_lib + 'src/fortran/find_domain.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 		larr(0) 	= n_gal
@@ -844,6 +834,12 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part 	= self->allocate(npart_tot, type='part')
 	;REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L}, npart_tot)
 
+	IF ~KEYWORD_SET(simout) THEN BEGIN
+		xp 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		vp 	*= info.kms 					;; [kms]
+		mp 	*= (info.unit_m / info.cgs.m_sun); [Msun]
+	ENDIF
+
 	part.xx 	= xp(*,0)
 	part.yy 	= xp(*,1)
 	part.zz 	= xp(*,2)
@@ -859,22 +855,9 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part.domain = dl
 	part.id 	= id
 
-	IF ~KEYWORD_SET(simout) THEN BEGIN
-		part.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
-		part.yy 	*= (info.unit_l/info.cgs.kpc)
-		part.zz 	*= (info.unit_l/info.cgs.kpc)
-
-		part.vx 	*= info.kms
-		part.vy 	*= info.kms
-		part.vz 	*= info.kms
-
-		part.mp 	*= (info.unit_m / info.cgs.m_sun)
-
-	ENDIF
-
 	TOC, elapsed_time=elt2
 
-    ;PRINT, elt1, ' - totnum ', elt2, ' - read all'
+    PRINT, elt1, ' - totnum ', elt2, ' - read all'
 	RETURN, part
 END
 
@@ -991,6 +974,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 
 	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
 
+	cell.p_thermal = mesh_hd(*,4) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
 
@@ -1418,8 +1402,8 @@ FUNCTION veluga::d_minmax, map2, min2, max2, stype=stype, loga=loga
 			END
 		'log2' : BEGIN
 			map 	= ALOG10(map + 1.d)
-			min 	= ALOG10(loga*min2 + 1.d)
-			max 	= ALOG10(loga*max2 + 1.d)
+			min 	= ALOG10(min2 + 1.d)
+			max 	= ALOG10(max2 + 1.d)
 			END
 		'lin' : BEGIN
 			min = min2 & max = max2
@@ -1445,7 +1429,7 @@ END
 
 FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, kernel=kernel, bandwidth=bandwidth, bintype=bintype
 	;;-----
-	;; Get 2d map
+	;; Get 2d map from particles
 	;;
 	;;	mode: [1] integer
 	;;		positive (>0) gives denstiy at each point
@@ -1627,6 +1611,178 @@ FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, k
 	ENDELSE
 END
 
+FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
+	amrvar=amrvar, amrtype=amrtype, minlev=minlev, maxlev=maxlev, proj=proj, $
+	delZ=delZ, xx0=xx0, vv0=vv0
+	;celltype=celltype, cellphase=cellphase, 
+
+	;;-----
+	;; Get gas map from amr data
+	;;	cell data should be given in physical unit
+	;;
+	;;	amrvar: [1] string
+	;;		'D' 	- density
+	;;		'T'		- temperature
+	;;		'PT'	- Thermal presusre
+	;;		'PR'	- Extenral pressure by rho X v^2 (xx0 and vv0 should be argued)
+	;;		'Z'		- Metallicity
+	;;
+	;;	amrtype: [1] string
+	;;		'MW'	- mass weighted
+	;;		'VW'	- volume weighted
+	;;		'MAX'	- Maximum along LOS
+	;;		'CD'	- Column Denstiy
+	;;
+	;;	minlev, maxlev: [1] long
+	;;		min and max amr level (if not set, a simulation value is employed)
+	;;
+	;;	proj: [1] string
+	;;		'xy'	- xy
+	;;
+	;;	delZ: [1] double
+	;;		slicing width
+	;;
+	;;	xx0, vv0: [3] double
+	;;		central position and velocity for computing external pressure
+	;;
+	;;-----
+
+	;;-----
+	;; Initial settings
+	;;-----
+	info  	= self->g_info(n_snap)
+	settings= self->getheader()
+
+	IF ~KEYWORD_SET(n_pix) THEN n_pix = 1000L
+	IF ~KEYWORD_SET(amrvar) THEN amrvar = 'D'
+	IF ~KEYWORD_SET(amrtype) THEN amrtype = 'MW'
+	IF ~KEYWORD_SET(delZ) THEN delZ = -1.d
+
+	
+
+	IF ~KEYWORD_SET(minlev) THEN minlev = info.levmin
+	IF ~KEYWORD_SET(maxlev) THEN maxlev = info.levmax
+
+	amrvar	= STRUPCASE(amrvar)
+	amrtype = STRUPCASE(amrtype)
+
+	IF amrtype EQ 'PR' THEN BEGIN
+		IF ~KEYWORD_SET(xx0) THEN BEGIN
+			xx0 = [0.d, 0.d, 0.d]
+			self->errourout, 'Centarl position is not given to compute extenral pressure'
+		ENDIF
+		IF ~KEYWORD_SET(vv0) THEN BEGIN
+			vv0 = [0.d, 0.d, 0.d]
+			self->errourout, 'Centarl velocity is not given to compute extenral pressure'
+		ENDIF
+	ENDIF
+
+	IF delz GT 0. AND ~KEYWORD_SET(xx0) THEN BEGIN
+		self->errorout, 'Cental position should be given to determine thickness along LOS'
+		xx0 	= [0.d, 0.d, 0.d]
+	ENDIF
+
+	;;-----
+	;; ALLOCATE
+	;;-----
+	temp 	= DBLARR(N_ELEMENTS(cell), 2)
+		;; 0 as variable
+		;; 1 as density (for MW)
+
+	temp(*,1) 	= cell.den
+
+	CASE amrvar OF
+		'D' : temp(*,0) = cell.den
+		'T' : temp(*,0) = cell.temp
+		'PT': temp(*,0) = cell.P_thermal
+		'PR': temp(*,0) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
+		'Z' : temp(*,0) = cell.zp
+	ENDCASE
+
+	map 	= DBLARR(n_pix, n_pix, 2)
+
+
+	IF delz GT 0. THEN BEGIN
+		CASE proj OF
+			'xy' : dz = ABS(cell.zz - xx0(2))
+			'xz' : dz = ABS(cell.yy - xx0(1))
+			'yz' : dz = ABS(cell.xx - xx0(0))
+		ENDCASE
+	ENDIF
+
+	;;-----
+	;; Compute
+	;;-----
+	FOR lev=minlev, maxlev DO BEGIN
+		IF delz LT 0. THEN BEGIN
+			cut 	= WHERE(cell.level EQ lev, nlev)
+		ENDIF ELSE BEGIN
+			cut 	= WHERE(cell.level EQ lev AND dz LT delz, nlev)
+		ENDELSE
+
+		IF nlev EQ 0L THEN CONTINUE
+
+		bandwidth 	= [1.d, 1.d]*cell(cut(0)).dx
+
+		ftr_name 	= settings.dir_lib + '/src/fortran/js_gasmap.so'
+		larr = LONARR(20) & darr = DBLARR(20)
+
+		larr(0)	= nlev
+		larr(1) = n_pix
+		larr(2) = self.num_thread
+
+		CASE proj OF
+			'xy' : BEGIN
+				xx = cell(cut).xx
+				yy = cell(cut).yy
+				END
+			'xz' : BEGIN
+				xx = cell(cut).xx
+				yy = cell(cut).zz
+				END
+			'yz' : BEGIN
+				xx = cell(cut).yy
+				yy = cell(cut).zz
+				END
+			ELSE: BEGIN
+				self->errourout,'Proper proj should be given: stop here'
+				STOP
+				END
+		ENDCASE
+
+		CASE amrtype OF
+			'MW': larr(10) = 1
+			'VW': larr(10) = 2
+			'MAX':larr(10) = 3
+			'CD': larr(10) = 4
+		ENDCASE
+
+		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
+			larr, darr, xx, yy, temp(cut,*), bandwidth, DOUBLE(xr), DOUBLE(yr), map)
+
+	ENDFOR
+
+	denmap 	= REFORM(map(*,*,1), n_pix, n_pix)
+	map 	= REFORM(map(*,*,0), n_pix, n_pix)
+
+	IF amrtype EQ 'MW' THEN BEGIN
+		cut 	= WHERE(denmap GT 0., ncut)
+		IF ncut GE 1L THEN map(cut) /= denmap(cut)
+
+		cut 	= WHERE(denmap EQ 0., ncut)
+		IF ncut GE 1L THEN map(cut) = 0.d
+	ENDIF ELSE IF amrtype EQ 'CD' THEN BEGIN
+
+		;; /cm^3 * kpc^3
+		binX = (xr(1)-xr(0))/n_pix ;; [kpc]
+		binY = (yr(1)-yr(0))/n_pix ;; [kpc]
+
+		map 	/= (binX*binY)		;; /cm^3 * kpc
+		map 	*= info.cgs.kpc 	;; /cm^2
+	ENDIF
+
+	RETURN, map
+END
 
 ;;-----
 ;; TABLE GENERATOR & LOAD

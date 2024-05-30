@@ -56,4 +56,7 @@ gfortran -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_pts.f90 -o js_kde_gauss_p
 gcc -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_pts_c2f.c -o js_kde_gauss_pts_c2f.o
 gcc -shared -fopenmp -mcmodel=large js_kde_gauss_pts.o js_kde_gauss_pts_c2f.o -o js_kde_gauss_pts.so -lgfortran
 
+gfortran -fopenmp -fPIC -mcmodel=large -c js_gasmap.f90 -o js_gasmap.o
+gcc -fopenmp -fPIC -mcmodel=large -c js_gasmap_c2f.c -o js_gasmap_c2f.o
+gcc -shared -fopenmp -mcmodel=large js_gasmap.o js_gasmap_c2f.o fft/fftlib.o -o js_gasmap.so -lgfortran
 
