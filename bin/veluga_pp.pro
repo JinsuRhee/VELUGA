@@ -43,7 +43,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 
 	runstat 	= REPLICATE({snap:-1L, iscatalog:-1L, dir:' ', elt:DBLARR(6), $
 		rv_raw:PTR_NEW(1), rv_id:PTR_NEW(1), rv_ptmatch:PTR_NEW(1), rv_bprop:PTR_NEW(1) $
-			}, settings.pp_snap(1)-settings.pp_snap(0)+1L)
+			}, ABS(settings.pp_snap(1)-settings.pp_snap(0))+1L)
 
 
 	;;-----
