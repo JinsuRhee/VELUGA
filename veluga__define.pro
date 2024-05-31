@@ -17,9 +17,21 @@ END
 
 FUNCTION veluga::allocate, nn, type=type
 
+	settings 	= self->getheader()
 	CASE type OF
 		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
-		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d}, nn)
+		'cell'		: BEGIN
+				IF N_ELEMENTS(settings.hydro_variables) LE 7L THEN BEGIN ;; specify by the # of elements
+					RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d}, nn)
+				ENDIF ELSE BEGIN
+					additional_hvar_tag 	= settings.hydro_variables(6L:*)
+					tmp 	= {xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d}
+					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
+						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), 0.d)
+
+					RETURN, REPLICATE(tmp, nn)
+				ENDELSE
+		    END
 		ELSE: STOP
 	ENDCASE
 END
@@ -972,6 +984,17 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.temp 	= mesh_hd(*,4)
 	cell.zp 	= mesh_hd(*,5)
 
+	IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
+		FOR i=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
+			IF STRPOS(settings.hydro_variables(i),'skip') GE 0L THEN CONTINUE
+
+			str 	= 'cell.' + STRTRIM(settings.hydro_variables(i),2) + ' = mesh_hd(*,' + STRING(i) + ')'
+			void 	= EXECUTE(str)
+		ENDFOR
+	ENDIF
+
+	STOP
+
 	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
 
 	cell.p_thermal = mesh_hd(*,4) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
@@ -1611,7 +1634,7 @@ FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, k
 	ENDELSE
 END
 
-FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
+FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	amrvar=amrvar, amrtype=amrtype, minlev=minlev, maxlev=maxlev, proj=proj, $
 	delZ=delZ, xx0=xx0, vv0=vv0
 	;celltype=celltype, cellphase=cellphase, 
@@ -1650,6 +1673,7 @@ FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;-----
 	;; Initial settings
 	;;-----
+tic
 	info  	= self->g_info(n_snap)
 	settings= self->getheader()
 
@@ -1682,6 +1706,8 @@ FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		xx0 	= [0.d, 0.d, 0.d]
 	ENDIF
 
+toc, /verbose
+print, 'intiaial'
 	;;-----
 	;; ALLOCATE
 	;;-----
@@ -1714,6 +1740,7 @@ FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;; Compute
 	;;-----
 	FOR lev=minlev, maxlev DO BEGIN
+tic
 		IF delz LT 0. THEN BEGIN
 			cut 	= WHERE(cell.level EQ lev, nlev)
 		ENDIF ELSE BEGIN
@@ -1759,8 +1786,11 @@ FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
 			larr, darr, xx, yy, temp(cut,*), bandwidth, DOUBLE(xr), DOUBLE(yr), map)
-
+toc, /verbose
+print, lev, 'draw'
 	ENDFOR
+
+tic
 
 	denmap 	= REFORM(map(*,*,1), n_pix, n_pix)
 	map 	= REFORM(map(*,*,0), n_pix, n_pix)
@@ -1780,6 +1810,8 @@ FUNCTION d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		map 	/= (binX*binY)		;; /cm^3 * kpc
 		map 	*= info.cgs.kpc 	;; /cm^2
 	ENDIF
+toc, /verbose
+print, 'post settings'
 
 	RETURN, map
 END
