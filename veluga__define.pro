@@ -990,10 +990,9 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 
 			str 	= 'cell.' + STRTRIM(settings.hydro_variables(i),2) + ' = mesh_hd(*,' + STRING(i) + ')'
 			void 	= EXECUTE(str)
+			;; [mass frac]
 		ENDFOR
 	ENDIF
-
-	STOP
 
 	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
 
