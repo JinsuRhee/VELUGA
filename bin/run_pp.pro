@@ -1,4 +1,4 @@
-PRO runpp, header, horg=horg, num_thread=num_thread
+PRO run_pp, header, horg=horg, num_thread=num_thread
 
         IF ~KEYWORD_SET(horg) THEN horg='g'
         IF ~KEYWORD_SET(num_thread) THEN num_thread=1L
