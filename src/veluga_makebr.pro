@@ -517,7 +517,6 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 
 	FOR i=treeset.n0, treeset.n1, treeset.dn DO BEGIN
 		;; SAVE PART?
-	IF i EQ 40L THEN STOP
 		;;----- SNAPSHOT CHECK (skip if this snapshot is empty)
 		dumfname        = settings.dir_catalog
                 IF settings.horg EQ 'h' THEN dumfname += 'Halo/'
