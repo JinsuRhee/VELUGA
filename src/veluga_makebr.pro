@@ -516,6 +516,7 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 	treelog	= {n_new:0L, n_link:0L, n_link2:0L, n_link3:0L, n_broken:0L, n_all:0L}
 
 	FOR i=treeset.n0, treeset.n1, treeset.dn DO BEGIN
+		TIC
 		;; SAVE PART?
 		;;----- SNAPSHOT CHECK (skip if this snapshot is empty)
 		dumfname        = settings.dir_catalog
@@ -571,6 +572,7 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 		;;----- REMOVE BRANCH
 		veluga_makebr_remove, settings, evoldum, tree, gind, complete_tree, n_comp, snap_curr, t_curr.nlink
 
+		TOC, elapsted_time=elt
 		;;----- TREELOG
 		PRINT, i, ' / ', treeset.N1, ' Using n_step = ', t_curr.nlink
                 PRINT, '        ALL : ' +  STRTRIM(treelog.n_all,2) + $
@@ -581,6 +583,8 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
                         ' / Broken : ' + STRTRIM(treelog.n_broken,2) + $
                         ' / NGal : ' + STRTRIM(gind+n_comp,2) + $
                         ' / Gind : ' + STRTRIM(gind,2)
+
+		PRINT, '	Takes in ', elt, '[sec]'
 
                 FOR ii=0L, N_TAGS(treelog)-1L DO treelog.(ii) = 0L
 	ENDFOR
