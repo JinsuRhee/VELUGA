@@ -21,11 +21,12 @@ FUNCTION veluga::allocate, nn, type=type
 	CASE type OF
 		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
 		'cell'		: BEGIN
+				info 	= self->g_info(1L)
 				IF N_ELEMENTS(settings.hydro_variables) LE 7L THEN BEGIN ;; specify by the # of elements
-					RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d}, nn)
+					RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}, nn)
 				ENDIF ELSE BEGIN
 					additional_hvar_tag 	= settings.hydro_variables(6L:*)
-					tmp 	= {xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d}
+					tmp 	= {xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}
 					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
 						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), 0.d)
 
@@ -112,7 +113,11 @@ FUNCTION veluga::r_gal_getdata, fid, str
 	H5D_CLOSE, did
 	RETURN, dumarr
 END
-FUNCTION veluga::r_gal, snap0, id0, horg=horg
+FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
+	;;-----
+	;;
+	;; IF Grpop is argued, only selected field are read
+	;;-----
 
 	;;-----
 	;; READ Galaxies
@@ -935,6 +940,8 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	mesh_hd	= DBLARR(ntot,nvarh)
 	mesh_lv	= LONARR(ntot)*0L - 10L
 
+	levelind= LONARR(info.levmax+1L) ;; for memory efficiency
+
 	;;-----
 	;; READ CELL
 	;;-----
@@ -955,7 +962,8 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell', $
 			larr, darr, file_a, file_h, file_i, $
-			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, dom_list)
+			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, dom_list, levelind)
+
 
 	;;-----
 	;; POST PROCESSING
@@ -983,6 +991,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.den 	= mesh_hd(*,0)
 	cell.temp 	= mesh_hd(*,4)
 	cell.zp 	= mesh_hd(*,5)
+	cell.levelind 	= PTR_NEW(levelind)
 
 	IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
 		FOR i=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
@@ -1635,7 +1644,7 @@ END
 
 FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	amrvar=amrvar, amrtype=amrtype, minlev=minlev, maxlev=maxlev, proj=proj, $
-	delZ=delZ, xx0=xx0, vv0=vv0
+	delZ=delZ, xx0=xx0, vv0=vv0, memeff=memeff
 	;celltype=celltype, cellphase=cellphase, 
 
 	;;-----
@@ -1667,12 +1676,14 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;	xx0, vv0: [3] double
 	;;		central position and velocity for computing external pressure
 	;;
+	;;	memeff: boolean
+	;;		if argued, export the original quantitiy map and density map
 	;;-----
 
 	;;-----
 	;; Initial settings
 	;;-----
-tic
+
 	info  	= self->g_info(n_snap)
 	settings= self->getheader()
 
@@ -1705,8 +1716,7 @@ tic
 		xx0 	= [0.d, 0.d, 0.d]
 	ENDIF
 
-toc, /verbose
-print, 'intiaial'
+
 	;;-----
 	;; ALLOCATE
 	;;-----
@@ -1716,12 +1726,64 @@ print, 'intiaial'
 
 	temp(*,1) 	= cell.den
 
+	;; Sun chemistry (Asplund 09)
+	sun_N_o_H	= 10.d^(7.83d - 12.d) ;; [#_N / #_H]
+	sun_C_o_H	= 10.d^(8.43d - 12.d)
+	sun_O_o_H	= 10.d^(8.69d - 12.d)
+	sun_Mg_o_H	= 10.d^(7.60d - 12.d)
+	sun_Si_o_H	= 10.d^(7.51d - 12.d)
+	sun_S_o_H	= 10.d^(7.12d - 12.d)
+	sun_Fe_o_H	= 10.d^(7.50d - 12.d)
+
 	CASE amrvar OF
 		'D' : temp(*,0) = cell.den
 		'T' : temp(*,0) = cell.temp
 		'PT': temp(*,0) = cell.P_thermal
 		'PR': temp(*,0) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
 		'Z' : temp(*,0) = cell.zp
+		'O/FE' 	: BEGIN
+			N_X 	= cell.chem_O / 15.999d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_O_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'MG/FE' 	: BEGIN
+			N_X 	= cell.chem_Mg / 24.305d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Mg_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'SI/FE' 	: BEGIN
+			N_X 	= cell.chem_Si / 28.0855d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'S/FE' 	: BEGIN
+			N_X 	= cell.chem_S / 32.065d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_S_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'C/H' 	: BEGIN
+			N_X 	= cell.chem_C / 12.011d
+			N_H 	= cell.chem_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_C_o_H)
+			END
+		'N/H' 	: BEGIN
+			N_X 	= cell.chem_N / 14.0067d
+			N_H 	= cell.chem_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
+			END
+		'FE/H' 	: BEGIN
+			N_X 	= cell.chem_Fe / 55.845d
+			N_H 	= cell.chem_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_Fe_o_H)
+			END
+		'DUST1' : temp(*,0)	= cell.mp * cell.dust_1
+		'DUST2' : temp(*,0)	= cell.mp * cell.dust_2
+		'DUST3' : temp(*,0)	= cell.mp * cell.dust_3
+		'DUST4' : temp(*,0)	= cell.mp * cell.dust_4
 	ENDCASE
 
 	map 	= DBLARR(n_pix, n_pix, 2)
@@ -1739,7 +1801,6 @@ print, 'intiaial'
 	;; Compute
 	;;-----
 	FOR lev=minlev, maxlev DO BEGIN
-tic
 		IF delz LT 0. THEN BEGIN
 			cut 	= WHERE(cell.level EQ lev, nlev)
 		ENDIF ELSE BEGIN
@@ -1785,21 +1846,22 @@ tic
 
 		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
 			larr, darr, xx, yy, temp(cut,*), bandwidth, DOUBLE(xr), DOUBLE(yr), map)
-toc, /verbose
-print, lev, 'draw'
 	ENDFOR
 
-tic
+
 
 	denmap 	= REFORM(map(*,*,1), n_pix, n_pix)
 	map 	= REFORM(map(*,*,0), n_pix, n_pix)
 
 	IF amrtype EQ 'MW' THEN BEGIN
+		IF KEYWORD_SET(memeff) THEN RETURN, {map:map, denmap:denmap}
 		cut 	= WHERE(denmap GT 0., ncut)
 		IF ncut GE 1L THEN map(cut) /= denmap(cut)
 
 		cut 	= WHERE(denmap EQ 0., ncut)
 		IF ncut GE 1L THEN map(cut) = 0.d
+
+
 	ENDIF ELSE IF amrtype EQ 'CD' THEN BEGIN
 
 		;; /cm^3 * kpc^3
@@ -1808,9 +1870,11 @@ tic
 
 		map 	/= (binX*binY)		;; /cm^3 * kpc
 		map 	*= info.cgs.kpc 	;; /cm^2
+
+		IF KEYWORD_SET(memeff) THEN RETURN, {map:map}
 	ENDIF
-toc, /verbose
-print, 'post settings'
+
+	IF KEYWORD_SET(memeff) THEN RETURN, {map:map}
 
 	RETURN, map
 END
