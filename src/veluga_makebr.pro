@@ -572,7 +572,7 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 		;;----- REMOVE BRANCH
 		veluga_makebr_remove, settings, evoldum, tree, gind, complete_tree, n_comp, snap_curr, t_curr.nlink
 
-		TOC, elapsted_time=elt
+		TOC, elapsed_time=elt
 		;;----- TREELOG
 		PRINT, i, ' / ', treeset.N1, ' Using n_step = ', t_curr.nlink
                 PRINT, '        ALL : ' +  STRTRIM(treelog.n_all,2) + $
