@@ -97,7 +97,9 @@ IF run EQ 2L THEN BEGIN
 
 		output 	= CREATE_STRUCT(output, 'SFR', sfr)
 		veluga->ppout2, ' - SFR computed'
-	ENDIF
+	ENDIF ELSE BEGIN
+		output	= CREATE_STRUCT(output, 'SFR', -1)
+	ENDELSE
 
 
 	;;-----
@@ -122,7 +124,9 @@ IF run EQ 2L THEN BEGIN
 		ENDIF
 		output	= CREATE_STRUCT(output, 'isclump', isclump)
 		veluga->ppout2, ' - Clump classification computed'
-	ENDIF
+	ENDIF ELSE BEGIN
+		output	= CREATE_STRUCT(output, 'isclump', -1)
+	ENDELSE
 
 	;;-----
 	;; Magnitude
@@ -186,7 +190,9 @@ IF run EQ 2L THEN BEGIN
 
 		output 	= CREATE_STRUCT(output, 'ABMag', abmag, 'SB', sbf)
 		veluga->ppout2, ' - Magnitude computed'
-	ENDIF
+	ENDIF ELSE BEGIN
+		output	= CREATE_STRUCT(output, 'ABmag', -1L, 'SB', -1L)
+	ENDELSE
 
 	;;-----
 	;; Contamination Fraction

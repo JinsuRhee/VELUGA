@@ -17,9 +17,22 @@ END
 
 FUNCTION veluga::allocate, nn, type=type
 
+	settings 	= self->getheader()
 	CASE type OF
 		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
-		'cell'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d}, nn)
+		'cell'		: BEGIN
+				info 	= self->g_info(1L)
+				IF N_ELEMENTS(settings.hydro_variables) LE 7L THEN BEGIN ;; specify by the # of elements
+					RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}, nn)
+				ENDIF ELSE BEGIN
+					additional_hvar_tag 	= settings.hydro_variables(6L:*)
+					tmp 	= {xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}
+					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
+						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), 0.d)
+
+					RETURN, REPLICATE(tmp, nn)
+				ENDELSE
+		    END
 		ELSE: STOP
 	ENDCASE
 END
@@ -100,7 +113,11 @@ FUNCTION veluga::r_gal_getdata, fid, str
 	H5D_CLOSE, did
 	RETURN, dumarr
 END
-FUNCTION veluga::r_gal, snap0, id0, horg=horg
+FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
+	;;-----
+	;;
+	;; IF Grpop is argued, only selected field are read
+	;;-----
 
 	;;-----
 	;; READ Galaxies
@@ -445,7 +462,7 @@ FUNCTION veluga::r_evol, snap0, id0, horg=horg
 	tree 	= self->r_tree(snap0, id0, horg=horg)
 	
 	IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
-		self->errout, 'No tree data exists for ' + horg
+		self->errorout, 'No tree data exists for ' + horg
 		RETURN, 1L
 	ENDIF
 
@@ -463,6 +480,7 @@ FUNCTION veluga::r_evol, snap0, id0, horg=horg
 
 	RETURN, g
 END
+
 ;;-----
 ;; SIMPLE GET FTNS
 ;;-----
@@ -554,11 +572,31 @@ PRO veluga::g_makearr, array, input, index, unitsize=unitsize, type=type
 	index = n1 + 1L
 END
 
-FUNCTION veluga::g_boundind, x, y, z, xr=xr, yr=yr, zr=zr
+
+FUNCTION veluga::g_rotate, x, y, z, axis
+
 	;;-----
-	;; Return index within a box
+	;; Rotate coordinate systems for axis to be z-axis
+	;;
+	;; If angular momentum is given, (x,y) is face-on and (x,z) or (y,z) are edge-on views
 	;;-----
 
+	rvec_z 	= axis / NORM(axis)
+	const 	= SQRT( (1. - rvec_z(0)^2 - rvec_z(1)^2) / (1. - rvec_z(1)^2) )
+	rvec_x 	= [const, 0., SQRT(1. - const^2)]
+	rvec_y 	= CROSSP(rvec_z, rvec_x)
+
+	xx0 	= x * rvec_x(0) + y * rvec_x(1) + z * rvec_x(2)
+	yy0 	= x * rvec_y(0) + y * rvec_y(1) + z * rvec_y(2)
+	zz0 	= x * rvec_z(0) + y * rvec_z(1) + z * rvec_z(2)
+	;vx0 	= v * rvec_x(0) + v * rvec_x(1) + v * rvec_x(2)
+	;vy0 	= v * rvec_y(0) + v * rvec_y(1) + v * rvec_y(2)
+	;vz0 	= v * rvec_z(0) + v * rvec_z(1) + v * rvec_z(2)
+
+	RETURN, {x:xx0, y:yy0, z:zz0}
+END
+
+FUNCTION veluga::g_boundind, xx=x, yy=y, zz=z, xr=xr, yr=yr, zr=zr
 	tmp 	= 'ind = WHERE('
 
 	IF KEYWORD_SET(xr) THEN BEGIN
@@ -572,12 +610,11 @@ FUNCTION veluga::g_boundind, x, y, z, xr=xr, yr=yr, zr=zr
 	IF KEYWORD_SET(zr) THEN BEGIN
 		tmp += 'AND z GE zr(0) AND z LT zr(1) '
 	ENDIF
-	tmp     += ')'
+	tmp     += ', nn)'
 	void    = EXECUTE(tmp)
 
-	RETURN, ind
+	RETURN, {ind:ind, n:nn}
 END
-
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
@@ -695,7 +732,6 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	rr 	= DOUBLE(rr2)*info.cgs.kpc / info.unit_l
 
 	dom_list 	= LONARR(n_gal, n_mpi) - 1L
-
 
 	ftr_name 	= settings.dir_lib + 'src/fortran/find_domain.so'
 		larr = LONARR(20) & darr = DBLARR(20)
@@ -815,6 +851,12 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part 	= self->allocate(npart_tot, type='part')
 	;REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L}, npart_tot)
 
+	IF ~KEYWORD_SET(simout) THEN BEGIN
+		xp 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
+		vp 	*= info.kms 					;; [kms]
+		mp 	*= (info.unit_m / info.cgs.m_sun); [Msun]
+	ENDIF
+
 	part.xx 	= xp(*,0)
 	part.yy 	= xp(*,1)
 	part.zz 	= xp(*,2)
@@ -830,22 +872,9 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part.domain = dl
 	part.id 	= id
 
-	IF ~KEYWORD_SET(simout) THEN BEGIN
-		part.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
-		part.yy 	*= (info.unit_l/info.cgs.kpc)
-		part.zz 	*= (info.unit_l/info.cgs.kpc)
-
-		part.vx 	*= info.kms
-		part.vy 	*= info.kms
-		part.vz 	*= info.kms
-
-		part.mp 	*= (info.unit_m / info.cgs.m_sun)
-
-	ENDIF
-
 	TOC, elapsed_time=elt2
 
-    ;PRINT, elt1, ' - totnum ', elt2, ' - read all'
+    PRINT, elt1, ' - totnum ', elt2, ' - read all'
 	RETURN, part
 END
 
@@ -911,6 +940,8 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	mesh_hd	= DBLARR(ntot,nvarh)
 	mesh_lv	= LONARR(ntot)*0L - 10L
 
+	levelind= LONARR(info.levmax+1L) ;; for memory efficiency
+
 	;;-----
 	;; READ CELL
 	;;-----
@@ -931,7 +962,8 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell', $
 			larr, darr, file_a, file_h, file_i, $
-			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, dom_list)
+			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, dom_list, levelind)
+
 
 	;;-----
 	;; POST PROCESSING
@@ -959,9 +991,21 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.den 	= mesh_hd(*,0)
 	cell.temp 	= mesh_hd(*,4)
 	cell.zp 	= mesh_hd(*,5)
+	cell.levelind 	= PTR_NEW(levelind)
+
+	IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
+		FOR i=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
+			IF STRPOS(settings.hydro_variables(i),'skip') GE 0L THEN CONTINUE
+
+			str 	= 'cell.' + STRTRIM(settings.hydro_variables(i),2) + ' = mesh_hd(*,' + STRING(i) + ')'
+			void 	= EXECUTE(str)
+			;; [mass frac]
+		ENDFOR
+	ENDIF
 
 	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
 
+	cell.p_thermal = mesh_hd(*,4) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
 
 	IF ~KEYWORD_SET(simout) THEN BEGIN
 
@@ -1372,6 +1416,468 @@ PRO veluga::g_potential, cell, part, $
 END
 
 
+;;-----
+;; DRAWING ROUTINES
+;;-----
+FUNCTION veluga::d_minmax, map2, min2, max2, stype=stype, loga=loga
+	map 	= map2
+
+	IF ~KEYWORD_SET(stype) THEN stype = 'log'
+	IF ~KEYWORD_SET(loga) THEN loga = 1000.d
+
+	CASE stype OF
+		'log' : BEGIN
+			map 	= ALOG(loga*map + 1.d) / ALOG(loga)
+			min 	= ALOG(loga*min2 + 1.d) / ALOG(loga)
+			max 	= ALOG(loga*max2 + 1.d) / ALOG(loga)
+			END
+		'log2' : BEGIN
+			map 	= ALOG10(map + 1.d)
+			min 	= ALOG10(min2 + 1.d)
+			max 	= ALOG10(max2 + 1.d)
+			END
+		'lin' : BEGIN
+			min = min2 & max = max2
+
+			END
+	ENDCASE
+
+	cut 	= WHERE(map LT min, ncut)
+	IF ncut GE 1L THEN map(cut) = 0.
+
+	cut 	= WHERE(map GT 0.)
+	map(cut)-= min
+
+	cut 	= WHERE(map GT max-min, ncut)
+	IF ncut GE 1L THEN map(cut) = max-min
+
+	map 	= map / (max - min)
+
+	RETURN, map
+
+END
+
+
+FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, kernel=kernel, bandwidth=bandwidth, bintype=bintype
+	;;-----
+	;; Get 2d map from particles
+	;;
+	;;	mode: [1] integer
+	;;		positive (>0) gives denstiy at each point
+	;;		negative (<0) gives density at each grid
+	;;
+	;;	kernel: [1] integer
+	;;		0 - 2D histogram
+	;;		1 - Gaussian kernel
+	;;		2 - Triangular kernel (not implemented)
+	;;		3 - p^3M (not implemented)
+	;;
+	;;	bintype: [1] string
+	;;		binning scheme
+	;;		'NGP' or 'CIC'
+	;;
+	;;	bandwidth: [2] single / double
+	;;		kernel size
+	;;		if not set, a pixel size used
+	;;-----
+
+
+
+	;;-----
+	;; Initial settings
+	;;-----
+	IF ~KEYWORD_SET(zz) THEN zz = xx*0.d + 1.d
+	IF ~KEYWORD_SET(n_pix) THEN n_pix = 1000L
+	IF ~KEYWORD_SET(mode) THEN mode = -1L
+	IF ~KEYWORD_SET(kernel) THEN kernel = 1L
+	IF ~KEYWORD_SET(bandwidth) THEN bandwidth = [xr(1)-xr(0), yr(1)-yr(0)]/n_pix
+	IF ~KEYWORD_SET(bintype) THEN bintype = 'NGP'
+
+	xx = DOUBLE(xx) & yy = DOUBLE(yy) & zz = DOUBLE(zz)
+	xr = DOUBLE(xr) & yr = DOUBLE(yr) & n_pix = LONG(n_pix)
+
+	n_dim = 2L
+	hmat 	= DBLARR(2,2)
+	hmat(0,0)	= bandwidth(0)^2
+	hmat(1,1) 	= bandwidth(1)^2
+	ihmat 	= INVERT(hmat)
+	const 	= DOUBLE(DETERM(hmat)^(-0.5))*(!pi*2.)^(-n_dim/2.)
+
+	settings	= self->getheader()
+
+	;;-----
+	;; Range cut
+	;;-----
+	cut 	= WHERE(xx GE xr(0) AND xx LE xr(1) AND yy GE yr(0) AND yy LE yr(1), ncut)
+	IF ncut EQ 0L THEN BEGIN
+		self->errorout, 'NO DATA ARE LEFT WITH THE GIVEN RANGES'
+		RETURN, -1
+	ENDIF
+
+	dx = xx(cut) & dy = yy(cut) & dz = zz(cut)
+
+	;;-----
+	;; Compute
+	;;-----
+	density 	= FLTARR(n_pix, n_pix)
+	;ptcl 		= FLTARR(n_pix)
+
+	IF KERNEL EQ 0L THEN BEGIN ;; 2D histogram
+		ftr_name 	= settings.dir_lib + '/src/fortran/js_kde_2dhisto.so'
+			larr = LONARR(20)
+			larr(0) = N_ELEMENTS(dx)
+			larr(1) = settings.num_thread
+			larr(2) = n_pix
+
+		void = CALL_EXTERNAL(ftr_name, 'js_kde_2dhisto', dx, dy, dz, density, ptcl, xr, yr, larr)
+	ENDIF ELSE IF kernel EQ 1L THEN BEGIN ;; Gaussian Kernel
+
+		;;----- Binning
+		grid2 	= DBLARR(n_pix*2, n_pix*2)
+
+		ftr_name 	= settings.dir_lib + '/src/fortran/js_kde_gauss_binning.so'
+			larr= LONARR(20)
+			larr(0) = N_ELEMENTS(dx)
+			larr(1) = settings.num_thread
+			larr(2) = n_pix
+
+			IF bintype EQ 'NGP' THEN larr(3) = 1L
+			IF bintype EQ 'CIC' THEN larr(3) = 2L
+
+			larr(4) = 1L
+
+		void 	= CALL_EXTERNAL(ftr_name, 'js_kde_gauss_binning', $
+			dx, dy, dz, xr, yr, grid2, larr)
+
+		gridorg 	= grid2
+
+		;;----- Kernel Matrix
+		delX 	= (xr(1)-xr(0))/n_pix
+		delY 	= (yr(1)-yr(0))/n_pix
+
+		grid_ker	= DBLARR(n_pix*2., n_pix*2.)
+
+		ix 	= DINDGEN(n_pix*2) + 0.5
+		iy 	= DINDGEN(n_pix*2) + 0.5
+
+		ix 	= REBIN(ix, n_pix*2, n_pix*2)
+		iy 	= REBIN(TRANSPOSE(iy), n_pix*2, n_pix*2)
+
+		ix 	= (n_pix - 0.5)*delX - ix * delX
+		iy 	= (n_pix - 0.5)*delY - iy * delY
+
+		dum_ker 	= -0.5*(ihmat(0,0) * ix^2 + ihmat(1,1) * iy^2 + $
+			(ihmat(0,1) + ihmat(1,0))*ABS(ix)*ABS(iy))
+
+		avoid 	= WHERE(dum_ker GT -700.0, nn)
+		IF nn EQ 0L THEN BEGIN 
+			PRINT, '?' 
+			STOP
+		ENDIF
+
+		grid_ker(avoid) 	= EXP(dum_ker(avoid))*const
+
+		;;----- Convolution
+		ift_bin 	= FFT(grid2, /DOUBLE)
+		ift_ker		= FFT(grid_ker, /DOUBLE)
+
+		ift_conv 	= ift_bin * ift_ker
+		grid 	= FFT(ift_conv, /DOUBLE, /inverse)
+		grid 	= DOUBLE(REAL_PART(grid))
+		grid2 = 0. & grid_ker = 0. & ift_bin = 0. & ift_ker = 0. & ix = 0. & iy = 0.
+
+		;;----- Adjust
+		grid2 	= grid
+		grid(*, 0:n_pix-1L) 	= grid2(*,n_pix:*)
+		grid(*,n_pix:*)			= grid2(*,0:n_pix-1L)
+
+		grid2 	= grid
+		grid(0:n_pix-1L,*) 		= grid2(n_pix:*,*)
+		grid(n_pix:*,*)			= grid2(0:n_pix-1L,*)
+
+		grid 	= grid(n_pix/2-1:n_pix/2+n_pix-2,n_pix/2-1:n_pix/2+n_pix-2)
+		density 	= grid
+
+		grid 	= 0.
+
+		IF mode GT 0. THEN BEGIN
+			PRINT, 'interpolation'
+
+			ptcl 	= DBLARR(N_ELEMETNS(dx))
+
+			ftr_name	= settings.dir_lib + '/src/fortran/js_kde_gauss_pts.so'
+				larr= LONARR(20)
+				larr(0) = N_ELEMENTS(dx)
+				larr(1) = settings.num_thread
+				larr(2) = n_pix
+
+			void 	= CALL_EXTERNAL(ftr_name, 'js_kde_gauss_pts', $
+				dx, dy, dz, xr, yr, density, ptcl, larr)
+		ENDIF
+	ENDIF
+
+	;;-----
+	;; RETURN
+	;;-----
+
+	IF mode GT 0L THEN BEGIN
+		ptcl 	= ptcl / TOTAL(ptcl) * TOTAL(dz)
+		RETURN, {x:dx, y:dy, z:ptcl}
+	ENDIF ELSE BEGIN
+		delx 	= (xr(1)-xr(0))/n_pix
+		dely 	= (yr(1)-yr(0))/n_pix
+
+		ix 	= FINDGEN(n_pix) + 0.5
+		iy 	= FINDGEN(n_pix) + 0.5
+		ix 	= REBIN(ix, n_pix, n_pix)
+		iy 	= REBIN(TRANSPOSE(iy), n_pix, n_pix)
+		ix 	= ix*delx + xr(0)
+		iy 	= iy*dely + yr(0)
+
+		cut_neg 	= WHERE(density LT 0., ncut)
+		IF ncut GE 1L THEN density(cut_neg) = 0.d
+
+		density 	= density / TOTAL(density) * TOTAL(dz)
+		RETURN, {x:ix, y:iy, z:density}
+	ENDELSE
+END
+
+FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
+	amrvar=amrvar, amrtype=amrtype, minlev=minlev, maxlev=maxlev, proj=proj, $
+	delZ=delZ, xx0=xx0, vv0=vv0, memeff=memeff
+	;celltype=celltype, cellphase=cellphase, 
+
+	;;-----
+	;; Get gas map from amr data
+	;;	cell data should be given in physical unit
+	;;
+	;;	amrvar: [1] string
+	;;		'D' 	- density
+	;;		'T'		- temperature
+	;;		'PT'	- Thermal presusre
+	;;		'PR'	- Extenral pressure by rho X v^2 (xx0 and vv0 should be argued)
+	;;		'Z'		- Metallicity
+	;;
+	;;	amrtype: [1] string
+	;;		'MW'	- mass weighted
+	;;		'VW'	- volume weighted
+	;;		'MAX'	- Maximum along LOS
+	;;		'CD'	- Column Denstiy
+	;;
+	;;	minlev, maxlev: [1] long
+	;;		min and max amr level (if not set, a simulation value is employed)
+	;;
+	;;	proj: [1] string
+	;;		'xy'	- xy
+	;;
+	;;	delZ: [1] double
+	;;		slicing width
+	;;
+	;;	xx0, vv0: [3] double
+	;;		central position and velocity for computing external pressure
+	;;
+	;;	memeff: boolean
+	;;		if argued, export the original quantitiy map and density map
+	;;-----
+
+	;;-----
+	;; Initial settings
+	;;-----
+
+	info  	= self->g_info(n_snap)
+	settings= self->getheader()
+
+	IF ~KEYWORD_SET(n_pix) THEN n_pix = 1000L
+	IF ~KEYWORD_SET(amrvar) THEN amrvar = 'D'
+	IF ~KEYWORD_SET(amrtype) THEN amrtype = 'MW'
+	IF ~KEYWORD_SET(delZ) THEN delZ = -1.d
+
+	
+
+	IF ~KEYWORD_SET(minlev) THEN minlev = info.levmin
+	IF ~KEYWORD_SET(maxlev) THEN maxlev = info.levmax
+
+	amrvar	= STRUPCASE(amrvar)
+	amrtype = STRUPCASE(amrtype)
+
+	IF amrtype EQ 'PR' THEN BEGIN
+		IF ~KEYWORD_SET(xx0) THEN BEGIN
+			xx0 = [0.d, 0.d, 0.d]
+			self->errourout, 'Centarl position is not given to compute extenral pressure'
+		ENDIF
+		IF ~KEYWORD_SET(vv0) THEN BEGIN
+			vv0 = [0.d, 0.d, 0.d]
+			self->errourout, 'Centarl velocity is not given to compute extenral pressure'
+		ENDIF
+	ENDIF
+
+	IF delz GT 0. AND ~KEYWORD_SET(xx0) THEN BEGIN
+		self->errorout, 'Cental position should be given to determine thickness along LOS'
+		xx0 	= [0.d, 0.d, 0.d]
+	ENDIF
+
+
+	;;-----
+	;; ALLOCATE
+	;;-----
+	temp 	= DBLARR(N_ELEMENTS(cell), 2)
+		;; 0 as variable
+		;; 1 as density (for MW)
+
+	temp(*,1) 	= cell.den
+
+	;; Sun chemistry (Asplund 09)
+	sun_N_o_H	= 10.d^(7.83d - 12.d) ;; [#_N / #_H]
+	sun_C_o_H	= 10.d^(8.43d - 12.d)
+	sun_O_o_H	= 10.d^(8.69d - 12.d)
+	sun_Mg_o_H	= 10.d^(7.60d - 12.d)
+	sun_Si_o_H	= 10.d^(7.51d - 12.d)
+	sun_S_o_H	= 10.d^(7.12d - 12.d)
+	sun_Fe_o_H	= 10.d^(7.50d - 12.d)
+
+	CASE amrvar OF
+		'D' : temp(*,0) = cell.den
+		'T' : temp(*,0) = cell.temp
+		'PT': temp(*,0) = cell.P_thermal
+		'PR': temp(*,0) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
+		'Z' : temp(*,0) = cell.zp
+		'O/FE' 	: BEGIN
+			N_X 	= cell.chem_O / 15.999d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_O_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'MG/FE' 	: BEGIN
+			N_X 	= cell.chem_Mg / 24.305d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Mg_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'SI/FE' 	: BEGIN
+			N_X 	= cell.chem_Si / 28.0855d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'S/FE' 	: BEGIN
+			N_X 	= cell.chem_S / 32.065d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_S_o_H) - ALOG10(sun_Fe_o_H))
+			END
+		'C/H' 	: BEGIN
+			N_X 	= cell.chem_C / 12.011d
+			N_H 	= cell.chem_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_C_o_H)
+			END
+		'N/H' 	: BEGIN
+			N_X 	= cell.chem_N / 14.0067d
+			N_H 	= cell.chem_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
+			END
+		'FE/H' 	: BEGIN
+			N_X 	= cell.chem_Fe / 55.845d
+			N_H 	= cell.chem_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_Fe_o_H)
+			END
+		'DUST1' : temp(*,0)	= cell.mp * cell.dust_1
+		'DUST2' : temp(*,0)	= cell.mp * cell.dust_2
+		'DUST3' : temp(*,0)	= cell.mp * cell.dust_3
+		'DUST4' : temp(*,0)	= cell.mp * cell.dust_4
+	ENDCASE
+
+	map 	= DBLARR(n_pix, n_pix, 2)
+
+
+	IF delz GT 0. THEN BEGIN
+		CASE proj OF
+			'xy' : dz = ABS(cell.zz - xx0(2))
+			'xz' : dz = ABS(cell.yy - xx0(1))
+			'yz' : dz = ABS(cell.xx - xx0(0))
+		ENDCASE
+	ENDIF
+
+	;;-----
+	;; Compute
+	;;-----
+	FOR lev=minlev, maxlev DO BEGIN
+		IF delz LT 0. THEN BEGIN
+			cut 	= WHERE(cell.level EQ lev, nlev)
+		ENDIF ELSE BEGIN
+			cut 	= WHERE(cell.level EQ lev AND dz LT delz, nlev)
+		ENDELSE
+
+		IF nlev EQ 0L THEN CONTINUE
+
+		bandwidth 	= [1.d, 1.d]*cell(cut(0)).dx
+
+		ftr_name 	= settings.dir_lib + '/src/fortran/js_gasmap.so'
+		larr = LONARR(20) & darr = DBLARR(20)
+
+		larr(0)	= nlev
+		larr(1) = n_pix
+		larr(2) = self.num_thread
+
+		CASE proj OF
+			'xy' : BEGIN
+				xx = cell(cut).xx
+				yy = cell(cut).yy
+				END
+			'xz' : BEGIN
+				xx = cell(cut).xx
+				yy = cell(cut).zz
+				END
+			'yz' : BEGIN
+				xx = cell(cut).yy
+				yy = cell(cut).zz
+				END
+			ELSE: BEGIN
+				self->errourout,'Proper proj should be given: stop here'
+				STOP
+				END
+		ENDCASE
+
+		CASE amrtype OF
+			'MW': larr(10) = 1
+			'VW': larr(10) = 2
+			'MAX':larr(10) = 3
+			'CD': larr(10) = 4
+		ENDCASE
+
+		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
+			larr, darr, xx, yy, temp(cut,*), bandwidth, DOUBLE(xr), DOUBLE(yr), map)
+	ENDFOR
+
+
+
+	denmap 	= REFORM(map(*,*,1), n_pix, n_pix)
+	map 	= REFORM(map(*,*,0), n_pix, n_pix)
+
+	IF amrtype EQ 'MW' THEN BEGIN
+		IF KEYWORD_SET(memeff) THEN RETURN, {map:map, denmap:denmap}
+		cut 	= WHERE(denmap GT 0., ncut)
+		IF ncut GE 1L THEN map(cut) /= denmap(cut)
+
+		cut 	= WHERE(denmap EQ 0., ncut)
+		IF ncut GE 1L THEN map(cut) = 0.d
+
+
+	ENDIF ELSE IF amrtype EQ 'CD' THEN BEGIN
+
+		;; /cm^3 * kpc^3
+		binX = (xr(1)-xr(0))/n_pix ;; [kpc]
+		binY = (yr(1)-yr(0))/n_pix ;; [kpc]
+
+		map 	/= (binX*binY)		;; /cm^3 * kpc
+		map 	*= info.cgs.kpc 	;; /cm^2
+
+		IF KEYWORD_SET(memeff) THEN RETURN, {map:map}
+	ENDIF
+
+	IF KEYWORD_SET(memeff) THEN RETURN, {map:map}
+
+	RETURN, map
+END
 
 ;;-----
 ;; TABLE GENERATOR & LOAD
