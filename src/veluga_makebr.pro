@@ -493,7 +493,7 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 	;;-----
 	;; ALLOCATE
 	;;-----
-	max_ngal	= 10000L
+	max_ngal	= 50000L
 		;; size of branch array (automatically reallocate when N>max_ngal) updated?
 	tree	= veluga_makebr_allo(settings, veluga, treeset, max_ngal)
 		;; array for branch
@@ -516,7 +516,17 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 	treelog	= {n_new:0L, n_link:0L, n_link2:0L, n_link3:0L, n_broken:0L, n_all:0L}
 
 	FOR i=treeset.n0, treeset.n1, treeset.dn DO BEGIN
+                IF i MOD 10L EQ 0L THEN $
+                        SAVE, filename=settings.dir_tree + '/tfout/tree_' + STRING(i,format='(I4.4)') + '.sav', treelog, tree, complete_tree, n_comp, gind, evoldum
+
+                IF i EQ 50L THEN STOP
+
+                IF N_ELEMENTS(tree) - gind LT max_ngal*0.2 THEN $
+                        veluga_makebr_reallocate_t, tree, gind, evoldum, max_ngal
+                IF N_ELEMENTS(complete_tree) - n_comp LT max_ngal*0.2 THEN $
+                        veluga_makebr_reallocate_ct, complete_tree, n_comp, max_ngal
 		TIC
+                ;;-----
 		;; SAVE PART?
 		;;----- SNAPSHOT CHECK (skip if this snapshot is empty)
 		dumfname        = settings.dir_catalog
