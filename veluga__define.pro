@@ -156,29 +156,32 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	;;-----
 	;; LOAD COLUMN
 	;;-----
-	gprop		= settings.column_list;[settings.column_list, settings.gal_prop]
+	IF ~KEYWORD_SET(gprop) THEN BEGIN 
+		gprop		= settings.column_list;[settings.column_list, settings.gal_prop]
+	
+		FOR i=0L, N_ELEMENTS(settings.gal_prop)-1L DO BEGIN
+	
+			IF settings.gal_prop(i) EQ 'sfr' THEN settings.gal_prop(i) = 'SFR'
+			IF settings.gal_prop(i) EQ 'SFR' THEN gprop	= [gprop, settings.gal_prop(i)]
+	
+			IF settings.gal_prop(i) EQ 'abmag' THEN settings.gal_prop(i) = 'ABmag'
+			IF settings.gal_prop(i) EQ 'ABmag' THEN $
+				FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
+					gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
+			
+	
+			IF settings.gal_prop(i) EQ 'sb' THEN settings.gal_prop(i) = 'SB'
+			IF settings.gal_prop(i) EQ 'SB' THEN $
+				FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
+					gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
+			
+			IF settings.gal_prop(i) EQ 'conf' THEN settings.gal_prop(i) = 'CONF'
+			IF settings.gal_prop(i) EQ 'confrac' THEN settings.gal_prop(i) = 'CONF'
+			IF settings.gal_prop(i) EQ 'CONF' THEN $
+				gprop 	= [gprop, 'ConFrac_M', 'ConFrac_N']
+		ENDFOR
+	ENDIF
 
-	FOR i=0L, N_ELEMENTS(settings.gal_prop)-1L DO BEGIN
-
-		IF settings.gal_prop(i) EQ 'sfr' THEN settings.gal_prop(i) = 'SFR'
-		IF settings.gal_prop(i) EQ 'SFR' THEN gprop	= [gprop, settings.gal_prop(i)]
-
-		IF settings.gal_prop(i) EQ 'abmag' THEN settings.gal_prop(i) = 'ABmag'
-		IF settings.gal_prop(i) EQ 'ABmag' THEN $
-			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
-				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
-		
-
-		IF settings.gal_prop(i) EQ 'sb' THEN settings.gal_prop(i) = 'SB'
-		IF settings.gal_prop(i) EQ 'SB' THEN $
-			FOR fi=0L, N_ELEMENTS(flux_list)-1L DO $
-				gprop 	= [gprop, settings.gal_prop(i) + '_' + STRTRIM(flux_list(fi))]
-		
-		IF settings.gal_prop(i) EQ 'conf' THEN settings.gal_prop(i) = 'CONF'
-		IF settings.gal_prop(i) EQ 'confrac' THEN settings.gal_prop(i) = 'CONF'
-		IF settings.gal_prop(i) EQ 'CONF' THEN $
-			gprop 	= [gprop, 'ConFrac_M', 'ConFrac_N']
-	ENDFOR
 
 	;;-----
 	;; Initial cut (Not implemented Yet)
@@ -1148,6 +1151,14 @@ FUNCTION veluga::g_gyr, snap0, tconf
 	RETURN, age
 END
 
+FUNCTION veluga::g_ztoage, z, info=info
+
+	IF ~KEYWORD_SET(info) THEN info = self->g_info(1L)
+	lbt_tbl 	= self->t_lbt_load(info.omega_m, info.omega_l, info.h0)
+
+
+	RETURN, lbt_tbl.gyr(-1) - INTERPOL(lbt_tbl.gyr, lbt_tbl.redsh, z)
+END
 FUNCTION veluga::g_sfr, xx, yy, zz, age, mass, xc, yc, zc, aperture=aperture, timewindow=timewindow
 	;;-----
 	;; Compute SFR with given ptcls
