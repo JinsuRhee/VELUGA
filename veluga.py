@@ -65,6 +65,7 @@ class veluga:
 				('mp', '<f8'), ('ap', '<f8'), ('zp', '<f8'), ('gyr', '<f8'), ('sfact', '<f8'), ('redsh', '<f8'), ('family', np.int32) , ('domain', np.int32), 
 				('id', np.int64), ('KE', '<f8'), ('UE', '<f8'), ('PE', '<f8')]
 		elif(type=='cell'):
+			print('add hydrovariables here')
 			dtype = [('xx', '<f8'), ('yy', '<f8'), ('zz', '<f8'),
 				('vx', '<f8'), ('vy', '<f8'), ('vz', '<f8'),
 				('level', np.int32), ('dx', '<f8'), ('den', '<f8'), ('temp', '<f8'), ('zp', '<f8'), ('mp', '<f8'), 

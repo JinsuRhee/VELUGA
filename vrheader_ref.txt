@@ -1,8 +1,8 @@
 ##-----
 ## Path Settings
 ##-----
-dir_raw		= '/storage6/jinsu/RESOL/test/test_refine/snapshots_ref/'
-dir_catalog	= '/storage6/jinsu/veluga/'
+dir_raw		= '/storage7/NH2/snapshots/'
+dir_catalog	= '/storage7/NH2/VELOCIraptor/'
 
 ##-----
 ## Output-related settings
@@ -20,13 +20,13 @@ gal_prop	= ['SFR', 'ABmag', 'SB', 'CONF']
 ##-----
 idtype		= 'long'	;; 'long' or 'long64'
 famtype		= 'new'		;; 'old' or 'new'
-neff		= 256		;; for zoom-in simulation, starting level
-ndomain		= 48		;; Number of domains of a RAMSES output
-lastsnap	= 1000L		;; Last snapshot number
+neff		= 4096		;; for zoom-in simulation, starting level
+ndomain		= 480		;; Number of domains of a RAMSES output
+lastsnap	= 811L		;; Last snapshot number
 
 skiprd_domain	= -1	;; skip reading domain in particle data
-skiprd_time 	= 1	;; skip reading time in particle data
-skiprd_metal	= 1	;; skip reading metal in particle data
+skiprd_time 	= -1	;; skip reading time in particle data
+skiprd_metal	= -1	;; skip reading metal in particle data
 
 hydro_variables = ['den', 'vx', 'vy', 'vz', 'temp', 'zp', 'skip']
 
@@ -42,5 +42,17 @@ pp_clump_mfrac	= 0.5d		;; Mass fraction for identifying newly formed clumps
 ##-----
 ## Branch Generating related
 ##-----
-makebr_snap 	= [10, 299, 1] ;; ;; snapshot range [snap_i, snap_f, dsnap]
+makebr_snap 	= [30, 811, 1]	;; snapshot range [snap_i, snap_f, dsnap]
 makebr_treedir	= 'des' ;; 'des' or 'prg'
+makebr_meritlimit	= 0.001
+makebr_bidkey		= 10000
+
+##-----
+## CTree (Complete Tree) related
+##-----
+ctree_snap	= [30L, 811L]
+ctree_rfact	= 10.d		;; Find Candidate galaxies within a sphere of a radius of speed * rfact * dT (10 seems good)
+ctree_meritlimit	= 0.001d	;; Merit limit to end a branch
+ctree_n_step_N		= 10L		;; number of branch points (>10) when collecting particles on a existing branch
+ctree_n_step_dN		= 10L		;; dN between the points (corresponding to 200 MYr seems good)
+ctree_n_search		= 20L		;; number of snapshots to be searched simultaneously

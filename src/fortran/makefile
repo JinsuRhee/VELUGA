@@ -56,4 +56,18 @@ gfortran -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_pts.f90 -o js_kde_gauss_p
 gcc -fopenmp -fPIC -mcmodel=large -c js_kde_gauss_pts_c2f.c -o js_kde_gauss_pts_c2f.o
 gcc -shared -fopenmp -mcmodel=large js_kde_gauss_pts.o js_kde_gauss_pts_c2f.o -o js_kde_gauss_pts.so -lgfortran
 
+gfortran -fopenmp -fPIC -mcmodel=large -c js_gasmap.f90 -o js_gasmap.o
+gcc -fopenmp -fPIC -mcmodel=large -c js_gasmap_c2f.c -o js_gasmap_c2f.o
+gcc -shared -fopenmp -mcmodel=large js_gasmap.o js_gasmap_c2f.o fft/fftlib.o -o js_gasmap.so -lgfortran
 
+gfortran -fopenmp -fPIC -fno-range-check -c get_hash.f90 -o get_hash.o
+gcc -fopenmp -fPIC -c get_hash_c2f.c -o get_hash_c2f.o
+gcc -shared -fopenmp get_hash.o get_hash_c2f.o -o get_hash.so -lgfortran
+
+gfortran -fopenmp -fPIC -fno-range-check -c get_merit.f90 -o get_merit.o
+gcc -fopenmp -fPIC -c get_merit_c2f.c -o get_merit_c2f.o
+gcc -shared -fopenmp get_merit.o get_merit_c2f.o -o get_merit.so -lgfortran
+
+gfortran -fopenmp -fPIC -mcmodel=large -fno-range-check -c get_merit2.f90 -o get_merit2.o
+gcc -fopenmp -fPIC -mcmodel=large -c get_merit2_c2f.c -o get_merit2_c2f.o
+gcc -shared -fopenmp get_merit2.o get_merit2_c2f.o -o get_merit2.so -lgfortran
