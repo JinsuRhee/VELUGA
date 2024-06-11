@@ -881,15 +881,16 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout, timereport=timereport
 
 	;;-----
 	;; Read AMR cells within a sphere
 	;; xc2, yc2, zc2, rr2 in kpc unit
 	;; IF dom_list is set, read all cells in the argued domain list. If not, read all cells inside R + dX
 	;;	/simout 	- output as the raw simulation unit
+	;;	/timereport - execution time report
 	;;-----
-
+	TIC
 	settings	= self->getheader()
 	num_thread = self.num_thread
 	IF ~KEYWORD_SET(dom_list) THEN BEGIN
@@ -914,7 +915,9 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	file_a	= dir + '/amr_' + STRING(snap0,'(I5.5)') + '.out'
 	file_h	= dir + '/hydro_' + STRING(snap0,'(I5.5)') + '.out'
 	file_i	= dir + '/info_' + STRING(snap0,'(I5.5)') + '.txt'
-	
+
+	TOC, elapsed_time=time_header
+	TIC
 	;;-----
 	;; MEMORY ALLOCATE
 	;;-----
@@ -937,13 +940,21 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell_totnum', $
 			larr, darr, file_a, file_h, ntot, nvarh, mg_ind, dom_list)
 
+
 	mesh_xg	= DBLARR(ntot,info.ndim)
 	mesh_vx	= DBLARR(ntot,info.ndim)
 	mesh_dx	= DBLARR(ntot)
 	mesh_hd	= DBLARR(ntot,nvarh)
 	mesh_lv	= LONARR(ntot)*0L - 10L
+	mesh_mp	= DBLARR(ntot)
 
-	levelind= LONARR(info.levmax+1L) ;; for memory efficiency
+	nx 	= larr(10)
+	ny 	= larr(11)
+	nz 	= larr(12)
+	nboundary 	= larr(13)
+
+	levelind= LONARR(info.levmax,2) ;; for memory efficiency
+
 
 	;;-----
 	;; READ CELL
@@ -960,25 +971,57 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		larr(8) = LONG(info.levmin)
 		larr(9) = LONG(info.levmax)
 		larr(10)= ntot
-		larr(11)= nvarh 
+		larr(11)= nvarh
+		larr(12)= nx
+		larr(13)= ny
+		larr(14)= nz
+		larr(15)= nboundary
 
-		
+		IF ~KEYWORD_SET(simout) THEN BEGIN
+			tokpc 	= (info.unit_l/info.cgs.kpc)	;; [kpc]
+			tokms	= info.kms 						;; [km/s]
+			tomsun 	= info.unit_d * info.unit_l^3.d / info.cgs.m_sun 	;; [Msun]
+			tocc 	= info.unit_nH 					;; [/cc]
+			toKmu	= info.unit_T2 					;; [K/mu]
+		ENDIF ELSE BEGIN
+			tokpc 	= 1.d
+			tokms 	= 1.d
+			tomsun 	= 1.d
+			tocc 	= 1.d
+			toKmu 	= 1.d
+		ENDELSE
+
+		darr(0)	= tokpc
+		darr(1)	= tokms
+		darr(2)	= tomsun
+		darr(3)	= tocc
+		darr(4)	= toKmu
+
+
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell', $
 			larr, darr, file_a, file_h, file_i, $
-			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, dom_list, levelind)
+			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, dom_list, levelind)
 
 
+	TOC, elapsed_time=time_read
+
+	TIC		
 	;;-----
 	;; POST PROCESSING
 	;;-----
+	;cut	= WHERE(mesh_lv GE 0L,ncell)
+	;IF ncell NE N_ELEMENTS(mesh_lv) THEN BEGIN
+	;	self->errorout, '!?'
+	;	STOP
+	;ENDIF
 
-	cut	= WHERE(mesh_lv GE 0L,ncell)
-	cell 	= self->allocate(ncell, type='cell')
+	
+	cell 	= self->allocate(ntot, type='cell')
 
-	mesh_xg 	= mesh_xg(cut,*)
-	mesh_hd 	= mesh_hd(cut,*)
-	mesh_lv 	= mesh_lv(cut)
-	mesh_dx 	= mesh_dx(cut)
+
+	lind 	= REPLICATE({i0:0L, i1:0L}, info.levmax+1L)
+	lind(1:*).i0 	= levelind(*,0)
+	lind(1:*).i1 	= levelind(*,1)
 
 	cell.xx 	= mesh_xg(*,0)
 	cell.yy 	= mesh_xg(*,1)
@@ -994,41 +1037,65 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.den 	= mesh_hd(*,0)
 	cell.temp 	= mesh_hd(*,4)
 	cell.zp 	= mesh_hd(*,5)
-	cell.levelind 	= PTR_NEW(levelind)
+	cell.mp 	= mesh_mp
+
+	cell.UE 	= mesh_hd(*,4)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
+	cell.p_thermal = mesh_hd(*,4)*mesh_hd(*,0) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
+
+	cell.levelind 	= PTR_NEW(lind)
 
 	IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
-		FOR i=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
-			IF STRPOS(settings.hydro_variables(i),'skip') GE 0L THEN CONTINUE
+		FOR i2=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
+			IF STRPOS(settings.hydro_variables(i2),'skip') GE 0L THEN CONTINUE
 
-			str 	= 'cell.' + STRTRIM(settings.hydro_variables(i),2) + ' = mesh_hd(*,' + STRING(i) + ')'
+			str 	= 'cell.' + STRTRIM(settings.hydro_variables(i2),2) + $
+				' = mesh_hd(*,' + STRING(i2) + ')'
 			void 	= EXECUTE(str)
 			;; [mass frac]
 		ENDFOR
 	ENDIF
+	
+	TOC, elapsed_time=time_post
 
-	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
-
-	cell.p_thermal = mesh_hd(*,4) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
-
-	IF ~KEYWORD_SET(simout) THEN BEGIN
-
-		cell.xx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
-		cell.yy 	*= (info.unit_l/info.cgs.kpc)
-		cell.zz 	*= (info.unit_l/info.cgs.kpc)
-
-		cell.vx 	*= info.kms					;; [km/s]
-		cell.vy 	*= info.kms
-		cell.vz 	*= info.kms
-
-		cell.dx 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
-		cell.mp 	= mesh_hd(*,0) * info.unit_d * (mesh_dx*info.unit_l)^3.d / info.cgs.m_sun 	;; [Msun]
-
-		cell.den 	*= (info.unit_nH)			;; [/cc]
-		cell.temp 	*= (1.d/mesh_hd(*,0) * info.unit_T2)	;; [K/mu]
-
-		;cell.p_thermal 	= mesh_hd(*,4) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200e-16
+;	mesh_xg 	= mesh_xg(cut,*)
+;	mesh_hd 	= mesh_hd(cut,*)
+;	mesh_lv 	= mesh_lv(cut)
+;	mesh_dx 	= mesh_dx(cut)
+;
+;	cell.xx 	= mesh_xg(*,0)
+;	cell.yy 	= mesh_xg(*,1)
+;	cell.zz 	= mesh_xg(*,2)
+;
+;	cell.vx 	= mesh_hd(*,1)
+;	cell.vy 	= mesh_hd(*,2)
+;	cell.vz 	= mesh_hd(*,3)
+;
+;	cell.level 	= mesh_lv
+;	cell.dx 	= mesh_dx
+;
+;	cell.den 	= mesh_hd(*,0)
+;	cell.temp 	= mesh_hd(*,4)
+;	cell.zp 	= mesh_hd(*,5)
+;	;cell.levelind 	= PTR_NEW(levelind)
+;
+;	IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
+;		FOR i=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
+;			IF STRPOS(settings.hydro_variables(i),'skip') GE 0L THEN CONTINUE
+;
+;			str 	= 'cell.' + STRTRIM(settings.hydro_variables(i),2) + ' = mesh_hd(*,' + STRING(i) + ')'
+;			void 	= EXECUTE(str)
+;			;; [mass frac]
+;		ENDFOR
+;	ENDIF
+;
+;	cell.UE 	= mesh_hd(*,4)/mesh_hd(*,0)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
+;	cell.p_thermal = mesh_hd(*,4) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
+	IF KEYWORD_SET(timereport) THEN BEGIN
+		PRINT, '%%----- TIME REPORT FOR G_CELL'
+		PRINT, '	READ HEADER : ', time_header, '[sec]'
+		PRINT, '	READ CELL 	: ', time_read, '[sec]'
+		PRINT, '	COPY ARRAY 	: ', time_post, '[sec]'
 	ENDIF
-
 	RETURN, cell
 
 END
@@ -1799,28 +1866,45 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 	map 	= DBLARR(n_pix, n_pix, 2)
 
-
-	IF delz GT 0. THEN BEGIN
-		CASE proj OF
-			'xy' : dz = ABS(cell.zz - xx0(2))
-			'xz' : dz = ABS(cell.yy - xx0(1))
-			'yz' : dz = ABS(cell.xx - xx0(0))
-		ENDCASE
-	ENDIF
-
 	;;-----
 	;; Compute
 	;;-----
+	levind 	= *(cell(0).levelind)
+
 	FOR lev=minlev, maxlev DO BEGIN
-		IF delz LT 0. THEN BEGIN
+
+		ind0 	= levind(lev).i0
+		ind1 	= levind(lev).i1
+
+		nlev 		= ind1-ind0 + 1L
+		IF nlev EQ 0L THEN CONTINUE
+
+		celldum 	= cell(ind0:ind1)
+		tempdum		= temp(ind0:ind1,*)
+
+		
+
+		check 	= ABS(celldum.level - lev)
+		IF MAX(check) GT 0L THEN BEGIN
 			cut 	= WHERE(cell.level EQ lev, nlev)
-		ENDIF ELSE BEGIN
-			cut 	= WHERE(cell.level EQ lev AND dz LT delz, nlev)
-		ENDELSE
+			celldum 	= cell(cut)
+		ENDIF
+
+		IF delz GT 0. THEN BEGIN
+			CASE proj OF
+				'xy' : dz = ABS(celldum.zz - xx0(2))
+				'xz' : dz = ABS(celldum.yy - xx0(1))
+				'yz' : dz = ABS(celldum.xx - xx0(0))
+			ENDCASE
+
+			cut 	= WHERE(dz LT delz, nlev)
+			celldum = celldum(cut)
+			tempdum	= tempdum(cut)
+		ENDIF
 
 		IF nlev EQ 0L THEN CONTINUE
 
-		bandwidth 	= [1.d, 1.d]*cell(cut(0)).dx
+		bandwidth 	= [1.d, 1.d]*celldum(0).dx
 
 		ftr_name 	= settings.dir_lib + '/src/fortran/js_gasmap.so'
 		larr = LONARR(20) & darr = DBLARR(20)
@@ -1831,16 +1915,16 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 		CASE proj OF
 			'xy' : BEGIN
-				xx = cell(cut).xx
-				yy = cell(cut).yy
+				xx = celldum.xx
+				yy = celldum.yy
 				END
 			'xz' : BEGIN
-				xx = cell(cut).xx
-				yy = cell(cut).zz
+				xx = celldum.xx
+				yy = celldum.zz
 				END
 			'yz' : BEGIN
-				xx = cell(cut).yy
-				yy = cell(cut).zz
+				xx = celldum.yy
+				yy = celldum.zz
 				END
 			ELSE: BEGIN
 				self->errourout,'Proper proj should be given: stop here'
@@ -1856,7 +1940,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		ENDCASE
 
 		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
-			larr, darr, xx, yy, temp(cut,*), bandwidth, DOUBLE(xr), DOUBLE(yr), map)
+			larr, darr, xx, yy, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map)
 	ENDFOR
 
 

@@ -11,8 +11,8 @@ typedef struct {
 void jsamr2cell(int argc, void *argv[])
 {
 	extern void jsamr2cell_();
-	int *larr, *mg_ind, *mesh_lv, *domlist;
-	double *darr, *mesh_xg, *mesh_hd, *mesh_dx;
+	int *larr, *mg_ind, *mesh_lv, *domlist, *levelind;
+	double *darr, *mesh_xg, *mesh_hd, *mesh_dx, *mesh_mp;
 	STRING *file_a, *file_h, *file_i;
 
 	larr	= (int *) argv[0];
@@ -25,8 +25,10 @@ void jsamr2cell(int argc, void *argv[])
 	mesh_dx	= (double *) argv[7];
 	mesh_hd	= (double *) argv[8];
 	mesh_lv	= (int *) argv[9];
-	domlist = (int *) argv[10];
+	mesh_mp = (double *) argv[10];
+	domlist = (int *) argv[11];
+	levelind = (int *) argv[12];
 
-	jsamr2cell_(larr, darr, file_a->s, file_h->s, file_i->s, mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, domlist);
+	jsamr2cell_(larr, darr, file_a->s, file_h->s, file_i->s, mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, domlist, levelind);
 }
 	
