@@ -153,7 +153,7 @@ END
 ;;-----
 ;; Determine ending point
 ;;-----
-PRO velgua_ctree_detend, settings, data, complete_tree, tree_key
+PRO veluga_ctree_detend, settings, data, complete_tree, tree_key
 	;snapinfo 	= settings.snapinfo
 	cut     = WHERE(data.stat EQ 'C', ncut)
 
@@ -925,14 +925,14 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 	;;-----
 	FOR i=N_ELEMENTS(settings.slist)-1L, 0L, -1L DO BEGIN
 		
-		c_snap 	= settings.slist(i)
 
+		c_snap 	= settings.slist(i)
 		PRINT, '%123123-----'
         PRINT, ''
         PRINT, '                TREE CONNECTION AT SNAP = ' + STRING(c_snap,format='(I4.4)') + ' ( ' + STRING(N_ELEMENTS(data),format='(I6)') + ' gals )'
 
       
-
+	IF c_snap LE 808L THEN STOP
         ;;-----
         ;; CLASSIFY GALAXIES WITH BROKEN TREES
         ;;-----
@@ -948,7 +948,7 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
         ;; Determine End point
         ;;-----
         TIC
-        velgua_ctree_detend, settings, data, complete_tree, tree_key
+        veluga_ctree_detend, settings, data, complete_tree, tree_key
        	TOC, elapsed_time=t_detend
 
        	;;-----

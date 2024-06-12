@@ -21,7 +21,6 @@ FUNCTION veluga::allocate, nn, type=type
 	CASE type OF
 		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
 		'cell'		: BEGIN
-				info 	= self->g_info(1L)
 				IF N_ELEMENTS(settings.hydro_variables) LE 7L THEN BEGIN ;; specify by the # of elements
 					RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}, nn)
 				ENDIF ELSE BEGIN
@@ -33,6 +32,8 @@ FUNCTION veluga::allocate, nn, type=type
 					RETURN, REPLICATE(tmp, nn)
 				ENDELSE
 		    END
+		;'cell_eff' 	: BEGIN
+
 		ELSE: STOP
 	ENDCASE
 END
@@ -748,7 +749,7 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 		xc, yc, zc, rr, info.hindex, info.levmax, dom_list, larr, darr)
 
 	void 	= WHERE(dom_list GE 0L, ncut)
-
+	
 	IF ncut GE 1L THEN BEGIN
 		dom_all 	= LONARR(n_gal*n_mpi)-1L
 		i0 	= 0L
@@ -940,7 +941,13 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell_totnum', $
 			larr, darr, file_a, file_h, ntot, nvarh, mg_ind, dom_list)
 
-
+	IF ntot EQ 0L THEN BEGIN
+		self->errorout,'No leaf cells in this domain. Dummy array returned'
+		cell 	= self->allocate(1L, type='cell')
+		cell.x 	= -1.d
+		RETURN, cell
+	ENDIF
+		
 	mesh_xg	= DBLARR(ntot,info.ndim)
 	mesh_vx	= DBLARR(ntot,info.ndim)
 	mesh_dx	= DBLARR(ntot)
@@ -1005,7 +1012,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 
 	TOC, elapsed_time=time_read
 
-	TIC		
+	TIC
 	;;-----
 	;; POST PROCESSING
 	;;-----
