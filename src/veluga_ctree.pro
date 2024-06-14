@@ -931,8 +931,7 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
         PRINT, ''
         PRINT, '                TREE CONNECTION AT SNAP = ' + STRING(c_snap,format='(I4.4)') + ' ( ' + STRING(N_ELEMENTS(data),format='(I6)') + ' gals )'
 
-      
-	IF c_snap LE 808L THEN STOP
+
         ;;-----
         ;; CLASSIFY GALAXIES WITH BROKEN TREES
         ;;-----

@@ -19,7 +19,7 @@
       REAL(KIND=8) mesh_hd(larr(11),larr(12))
       INTEGER(KIND=4) mesh_lv(larr(11))
       INTEGER(KIND=4) domlist(larr(1))
-      INTEGER(KIND=4) levind(larr(10),2)
+      INTEGER(KIND=4) levind(larr(10),3)
 
 !!!!! LOCAL VARIABLES
 
@@ -117,6 +117,7 @@
 
         levind(i,1) = ind_onlevel(i,1)-1
         levind(i,2) = ind_onlevel(i,2)-1
+        levind(i,3) = ncell_onlevel(i)
       ENDDO
 
       !!----- ORDERING

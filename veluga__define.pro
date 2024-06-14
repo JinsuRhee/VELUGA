@@ -19,17 +19,28 @@ FUNCTION veluga::allocate, nn, type=type
 
 	settings 	= self->getheader()
 	CASE type OF
-		'part'		: RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
+		'part'		: BEGIN
+			;RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, gyr:0.d, redsh:0.d, sfact:0.d, id:0L, family:0L, domain:0L, KE:0.d, UE:0.d, PE:0.d}, nn)
+			da 	= DBLARR(nn)
+			la 	= LONARR(nn)
+			pa 	= PTRARR(nn)
+			RETURN, {N:nn, xx:da, yy:da, zz:da, vx:da, vy:da, vz:da, mp:da, ap:da, zp:da, gyr:da, redsh:da, sfact:da, id:la, family:la, domain:la, KE:da, UE:da, PE:da, dum1:pa, dum2:pa, dum3:pa, dum4:pa, dum5:pa, tag:'part'}
+			END
 		'cell'		: BEGIN
-				IF N_ELEMENTS(settings.hydro_variables) LE 7L THEN BEGIN ;; specify by the # of elements
-					RETURN, REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}, nn)
-				ENDIF ELSE BEGIN
-					additional_hvar_tag 	= settings.hydro_variables(6L:*)
-					tmp 	= {xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, level:0L, dx:0.d, den:0.d, temp:0.d, zp:0.d, mp:0.d, KE:0.d, UE:0.d, PE:0.d, P_thermal:0.d, levelind:PTR_NEW(/allocate)}
-					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
-						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), 0.d)
+			da 	= DBLARR(nn)
+			la 	= LONARR(nn)
+			pa 	= PTRARR(nn)
+			info 	= self->g_info(1L)
 
-					RETURN, REPLICATE(tmp, nn)
+			IF N_ELEMENTS(settings.hydro_variables) LE 7L THEN BEGIN ;; specify by the # of elements
+				RETURN, {N:nn, xx:da, yy:da, zz:da, vx:da, vy:da, vz:da, level:la, dx:da, den:da, temp:da, zp:da, mp:da, KE:da, UE:da, PE:da, P_thermal:da, levelind:LONARR(info.levmax+1L,3), dum1:pa, dum2:pa, dum3:pa, dum4:pa, dum5:pa, tag:'cell'}
+			ENDIF ELSE BEGIN
+					additional_hvar_tag 	= settings.hydro_variables(6L:*)
+					tmp 	= {N:nn, xx:da, yy:da, zz:da, vx:da, vy:da, vz:da, level:la, dx:da, den:da, temp:da, zp:da, mp:da, KE:da, UE:da, PE:da, P_thermal:da, levelind:LONARR(info.levmax+1L,3), dum1:pa, dum2:pa, dum3:pa, dum4:pa, dum5:pa, tag:'cell'}
+					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
+						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), da)
+
+					RETURN, tmp;REPLICATE(tmp, nn)
 				ENDELSE
 		    END
 		;'cell_eff' 	: BEGIN
@@ -883,14 +894,28 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 END
 
 FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout, timereport=timereport
-
 	;;-----
 	;; Read AMR cells within a sphere
-	;; xc2, yc2, zc2, rr2 in kpc unit
-	;; IF dom_list is set, read all cells in the argued domain list. If not, read all cells inside R + dX
-	;;	/simout 	- output as the raw simulation unit
-	;;	/timereport - execution time report
+	;;	snap0: [1] integer
+	;;		snapshot number
+	;; 
+	;; 	xc2, yc2, zc2, rr2: [1] double
+	;;		center & radius in kpc unit
+	;;
+	;;	dom_list: [N] integer
+	;;		domain_list
+	;;		If set, read all cells in the argued domain. If not, read all cells inside rr2 + dx
+	;;
+	;;	simout: boolean
+	;;		If set, output as the raw code unit
+	;;
+	;;	timereport: boolean
+	;;		If set, time report will be shown
+	;;
 	;;-----
+
+
+
 	TIC
 	settings	= self->getheader()
 	num_thread = self.num_thread
@@ -912,6 +937,11 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		yr	= [-1d,1d] * rr + yc
 		zr	= [-1d,1d] * rr + zc
 	ENDIF
+
+	IF ~KEYWORD_SET(range_refine) THEN range_refine = [-1.d, 2.d]
+	IF ~KEYWORD_SET(range_xx) THEN range_xx = [-2.d, 2.d]
+	IF ~KEYWORD_SET(range_yy) THEN range_yy = [-2.d, 2.d]
+	IF ~KEYWORD_SET(range_zz) THEN range_zz = [-2.d, 2.d]
 
 	file_a	= dir + '/amr_' + STRING(snap0,'(I5.5)') + '.out'
 	file_h	= dir + '/hydro_' + STRING(snap0,'(I5.5)') + '.out'
@@ -944,7 +974,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	IF ntot EQ 0L THEN BEGIN
 		self->errorout,'No leaf cells in this domain. Dummy array returned'
 		cell 	= self->allocate(1L, type='cell')
-		cell.x 	= -1.d
+		cell.xx 	= -1.d
 		RETURN, cell
 	ENDIF
 		
@@ -960,7 +990,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	nz 	= larr(12)
 	nboundary 	= larr(13)
 
-	levelind= LONARR(info.levmax,2) ;; for memory efficiency
+	levelind= LONARR(info.levmax,3) ;; for memory efficiency
 
 
 	;;-----
@@ -1004,7 +1034,6 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		darr(3)	= tocc
 		darr(4)	= toKmu
 
-
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell', $
 			larr, darr, file_a, file_h, file_i, $
 			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, dom_list, levelind)
@@ -1021,14 +1050,13 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	;	self->errorout, '!?'
 	;	STOP
 	;ENDIF
-
-	
 	cell 	= self->allocate(ntot, type='cell')
 
-
-	lind 	= REPLICATE({i0:0L, i1:0L}, info.levmax+1L)
-	lind(1:*).i0 	= levelind(*,0)
-	lind(1:*).i1 	= levelind(*,1)
+	TOC, elapsed_time=time_allocation
+	TIC
+	;lind 	= REPLICATE({i0:0L, i1:0L}, info.levmax+1L)
+	;lind(1:*).i0 	= levelind(*,0)
+	;lind(1:*).i1 	= levelind(*,1)
 
 	cell.xx 	= mesh_xg(*,0)
 	cell.yy 	= mesh_xg(*,1)
@@ -1049,7 +1077,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.UE 	= mesh_hd(*,4)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
 	cell.p_thermal = mesh_hd(*,4)*mesh_hd(*,0) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
 
-	cell.levelind 	= PTR_NEW(lind)
+	cell.levelind 	= [levelind(0,*), levelind]
 
 	IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
 		FOR i2=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
@@ -1101,6 +1129,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		PRINT, '%%----- TIME REPORT FOR G_CELL'
 		PRINT, '	READ HEADER : ', time_header, '[sec]'
 		PRINT, '	READ CELL 	: ', time_read, '[sec]'
+		PRINT, '	ALLOCATION 	: ', time_allocation, '[sec]'
 		PRINT, '	COPY ARRAY 	: ', time_post, '[sec]'
 	ENDIF
 	RETURN, cell
@@ -1500,7 +1529,59 @@ PRO veluga::g_potential, cell, part, $
 	RETURN
 END
 
+FUNCTION veluga::g_extract, array, ind
+	;;-----
+	;; Reshape a particle / cell array with the argued ind
+	;;
+	;; For a cell array, levind is changed with the new shape
+	;;-----
 
+	tag 	= TAG_NAMES(array)
+
+	n_old 	= array.N
+	n_new 	= N_ELEMENTS(ind)
+
+	IF array.tag EQ 'cell' THEN BEGIN
+		levind 	= array.levelind * 0L
+
+		cell_lev 	= array.level(ind)
+		info 	= self->g_info(1L)
+
+		ind0	= 0L
+		FOR lev=0L, info.levmax DO BEGIN
+			cut 	= WHERE(cell_lev EQ lev, ncut)
+
+
+			IF ncut GE 1L THEN BEGIN
+				ind1 	= ind0 + ncut - 1L
+				levind(lev,0) 	= ind0
+				levind(lev,1)	= ind1
+				levind(lev,2) 	= ncut
+
+				ind0 	= ind1 + 1L
+			ENDIF
+		ENDFOR
+	ENDIF
+
+	strdum 	= 'array2 = {'
+	FOR i=0L, N_ELEMENTS(tag)-1L DO BEGIN
+		CASE tag(i) OF
+			'N': strdum = strdum + 'N:' + STRTRIM(n_new,2) + ' '
+			'LEVELIND': strdum = strdum + 'levelind:levind '
+			'TAG': strdum = strdum + 'tag:array.tag '
+			ELSE: strdum = strdum + tag(i) + ':array.' + tag(i) + '(ind) '
+			
+		ENDCASE
+
+		IF i NE N_ELEMENTS(tag)-1L THEN strdum = strdum + ', '
+	ENDFOR
+	strdum 	= strdum + '}'
+
+	void 	= EXECUTE(strdum)
+
+	RETURN, array2
+
+END
 ;;-----
 ;; DRAWING ROUTINES
 ;;-----
@@ -1688,7 +1769,7 @@ FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, k
 		IF mode GT 0. THEN BEGIN
 			PRINT, 'interpolation'
 
-			ptcl 	= DBLARR(N_ELEMETNS(dx))
+			ptcl 	= DBLARR(N_ELEMENTS(dx))
 
 			ftr_name	= settings.dir_lib + '/src/fortran/js_kde_gauss_pts.so'
 				larr= LONARR(20)
@@ -1805,7 +1886,9 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;-----
 	;; ALLOCATE
 	;;-----
-	temp 	= DBLARR(N_ELEMENTS(cell), 2)
+	temp 	= DBLARR(N_ELEMENTS(cell.n), 2)
+	PRINT, ' alert : should change here!!'
+	;temp 	= DBLARR(cell.N, 2)
 		;; 0 as variable
 		;; 1 as density (for MW)
 
@@ -1876,62 +1959,76 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;-----
 	;; Compute
 	;;-----
-	levind 	= *(cell(0).levelind)
+	levind 	= cell.levelind
 
+	integrity 	= 0L
 	FOR lev=minlev, maxlev DO BEGIN
 
-		ind0 	= levind(lev).i0
-		ind1 	= levind(lev).i1
+		IF levind(lev,2) EQ 0L THEN CONTINUE
+		ind0 	= levind(lev,0)
+		ind1 	= levind(lev,1)
 
-		nlev 		= ind1-ind0 + 1L
-		IF nlev EQ 0L THEN CONTINUE
-
-		celldum 	= cell(ind0:ind1)
+		xx 	= cell.xx(ind0:ind1)
+		yy 	= cell.yy(ind0:ind1)
+		zz 	= cell.zz(ind0:ind1)
+		level= cell.level(ind0:ind1)
 		tempdum		= temp(ind0:ind1,*)
+		dx 	= cell.dx(ind0)
 
 		
 
-		check 	= ABS(celldum.level - lev)
+		check 	= ABS(level - lev)
 		IF MAX(check) GT 0L THEN BEGIN
 			cut 	= WHERE(cell.level EQ lev, nlev)
-			celldum 	= cell(cut)
-		ENDIF
+			IF nlev EQ 0L THEN CONTINUE
+			xx 	= cell.xx(cut)
+			yy 	= cell.yy(cut)
+			zz 	= cell.zz(cut)
+			tempdum	= tempdum(cut,*)
+			dx 	= cell.dx(cut(0))
+			integrity	+= nlev
+		ENDIF ELSE BEGIN
+			integrity	+= levind(lev,2)
+		ENDELSE
 
 		IF delz GT 0. THEN BEGIN
 			CASE proj OF
-				'xy' : dz = ABS(celldum.zz - xx0(2))
-				'xz' : dz = ABS(celldum.yy - xx0(1))
-				'yz' : dz = ABS(celldum.xx - xx0(0))
+				'xy' : dz = ABS(zz - xx0(2))
+				'xz' : dz = ABS(yy - xx0(1))
+				'yz' : dz = ABS(xx - xx0(0))
 			ENDCASE
 
 			cut 	= WHERE(dz LT delz, nlev)
-			celldum = celldum(cut)
-			tempdum	= tempdum(cut)
+			
+			xx 	= xx(cut)
+			yy 	= yy(cut)
+			zz 	= zz(cut)
+			tempdum	= tempdum(cut,*)
 		ENDIF
 
-		IF nlev EQ 0L THEN CONTINUE
+		;IF nlev EQ 0L THEN CONTINUE
 
-		bandwidth 	= [1.d, 1.d]*celldum(0).dx
+		bandwidth 	= [1.d, 1.d]*dx
 
 		ftr_name 	= settings.dir_lib + '/src/fortran/js_gasmap.so'
 		larr = LONARR(20) & darr = DBLARR(20)
 
-		larr(0)	= nlev
+		larr(0)	= N_ELEMENTS(xx)
 		larr(1) = n_pix
 		larr(2) = self.num_thread
 
 		CASE proj OF
 			'xy' : BEGIN
-				xx = celldum.xx
-				yy = celldum.yy
+				xx2 = xx
+				yy2 = yy
 				END
 			'xz' : BEGIN
-				xx = celldum.xx
-				yy = celldum.zz
+				xx2 = xx
+				yy2 = zz
 				END
 			'yz' : BEGIN
-				xx = celldum.yy
-				yy = celldum.zz
+				xx2 = yy
+				yy2 = zz
 				END
 			ELSE: BEGIN
 				self->errourout,'Proper proj should be given: stop here'
@@ -1947,10 +2044,15 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		ENDCASE
 
 		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
-			larr, darr, xx, yy, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map)
+			larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map)
 	ENDFOR
 
-
+	IF integrity NE N_ELEMENTS(temp(*,0)) THEN BEGIN
+		self->errorout, 'levelind integrity is broken'
+		self->errorout, 'N_cell = ', STRTRIM(N_ELEMENTS(tmp(*,0)),2)
+		self->errorout, 'N_lev  = ', STRTRIM(integrity,2)
+		STOP
+	ENDIF
 
 	denmap 	= REFORM(map(*,*,1), n_pix, n_pix)
 	map 	= REFORM(map(*,*,0), n_pix, n_pix)
