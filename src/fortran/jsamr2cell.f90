@@ -23,7 +23,7 @@
 
 !!!!! LOCAL VARIABLES
 
-      INTEGER(KIND=4) i, j, ndom, n_thread, ncpu, ndim, levelmin, levelmax
+      INTEGER(KIND=4) i, j, k, ndom, n_thread, ncpu, ndim, levelmin, levelmax
       INTEGER(KIND=4) nx, ny, nz, nvarh, ntot, nboundary
       INTEGER(KIND=4) icpu, omp_ind, levind_tmp(larr(10))
 
@@ -64,7 +64,7 @@
 
       !$OMP PARALLEL DO &
       !$OMP & shared(larr, fname_a, fname_h, ndom) &
-      !$OMP & shared(mesh_xg, mesh_dx, mesh_lv, mesh_hd, levind) &
+      !$OMP & shared(mesh_xg, mesh_dx, mesh_lv, mesh_hd, levind2) &
       !$OMP & private(icpu, omp_ind, levind_tmp)
       DO i=1, ndom
         icpu     = domlist(i)
@@ -77,6 +77,7 @@
         levind2(i,:)   = levind_tmp
       ENDDO
       !$OMP END PARALLEL DO
+
 
       !!-----
       !! SORTING BY LEVEL
@@ -141,16 +142,20 @@
           i0 = levind2(i,ilev-1)
           i1 = levind2(i,ilev)
           IF(i0 .EQ. 0 .AND. i .NE. 1) THEN
-            DO j=levelmax, levelmin, -1
-              IF(levind2(i-1,j) .NE. 0) THEN
-                i0 = levind2(i-1,j)
-                EXIT
-              ENDIF
+            DO k=i-1,1,-1
+              DO j=levelmax, levelmin, -1
+                IF(levind2(k,j) .NE. 0) THEN
+                  i0 = levind2(k,j)
+                  EXIT
+                ENDIF
+              ENDDO
+              IF(i0 .NE. 0) EXIT
             ENDDO
           ENDIF
           i0 = i0 + 1
 
           ind1  = i1-i0 + ind0
+          !print *, i, ilev, i0, i1, ind0, ind1, size(mesh_lv2)
 
           mesh_xg(ind0:ind1,:)  = mesh_xg2(i0:i1,:)*tokpc
           mesh_lv(ind0:ind1)    = mesh_lv2(i0:i1)
@@ -164,7 +169,7 @@
           mesh_mp(ind0:ind1)    = mesh_hd2(i0:i1,1)*(mesh_dx2(i0:i1)**3.)*tomsun
 
           IF(nvarh .GE. 7) THEN
-            mesh_hd(ind0:ind1,7:nvarh)  = mesh_hd2(ind0:ind1,7:nvarh)
+            mesh_hd(ind0:ind1,7:nvarh)  = mesh_hd2(i0:i1,7:nvarh)
           ENDIF
 
           ind0 = ind1 + 1

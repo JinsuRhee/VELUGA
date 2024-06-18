@@ -977,7 +977,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		cell.xx 	= -1.d
 		RETURN, cell
 	ENDIF
-		
+
 	mesh_xg	= DBLARR(ntot,info.ndim)
 	mesh_vx	= DBLARR(ntot,info.ndim)
 	mesh_dx	= DBLARR(ntot)
@@ -1886,8 +1886,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;-----
 	;; ALLOCATE
 	;;-----
-	temp 	= DBLARR(N_ELEMENTS(cell.n), 2)
-	PRINT, ' alert : should change here!!'
+	temp 	= DBLARR(cell.n, 2)
 	;temp 	= DBLARR(cell.N, 2)
 		;; 0 as variable
 		;; 1 as density (for MW)
@@ -1927,6 +1926,13 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 			N_Fe 	= cell.chem_Fe / 55.845d
 			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
 			END
+		'ALPHA/FE'	: BEGIN
+			N_X 	= cell.chem_Si / 28.0855d + cell.chem_O / 15.999d + cell.chem_Mg / 24.305d
+			N_H 	= cell.chem_H
+			N_Fe 	= cell.chem_Fe / 55.845d * 3.d
+			sOh 	= (sun_Mg_o_H + sun_Si_o_H + sun_O_o_H)
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sOh) - ALOG10(sun_Fe_o_H*3.d))
+			END
 		'S/FE' 	: BEGIN
 			N_X 	= cell.chem_S / 32.065d
 			N_H 	= cell.chem_H
@@ -1943,6 +1949,12 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 			N_H 	= cell.chem_H
 			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
 			END
+		'LIGHT/H' 	: BEGIN
+			N_X 	= cell.chem_N / 14.0067d + cell.chem_C / 12.011d
+			N_H 	= cell.chem_H * 2.d
+			soH 	= sun_N_o_H + sun_C_o_H
+			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(soh/2.)
+			END
 		'FE/H' 	: BEGIN
 			N_X 	= cell.chem_Fe / 55.845d
 			N_H 	= cell.chem_H
@@ -1952,7 +1964,9 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		'DUST2' : temp(*,0)	= cell.mp * cell.dust_2
 		'DUST3' : temp(*,0)	= cell.mp * cell.dust_3
 		'DUST4' : temp(*,0)	= cell.mp * cell.dust_4
+		'DUST' 	: temp(*,0)	= cell.mp * (cell.dust_1 + cell.dust_2 + cell.dust_3 + cell.dust_4)
 	ENDCASE
+
 
 	map 	= DBLARR(n_pix, n_pix, 2)
 
@@ -1963,7 +1977,6 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 	integrity 	= 0L
 	FOR lev=minlev, maxlev DO BEGIN
-
 		IF levind(lev,2) EQ 0L THEN CONTINUE
 		ind0 	= levind(lev,0)
 		ind1 	= levind(lev,1)
@@ -1975,8 +1988,6 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		tempdum		= temp(ind0:ind1,*)
 		dx 	= cell.dx(ind0)
 
-		
-
 		check 	= ABS(level - lev)
 		IF MAX(check) GT 0L THEN BEGIN
 			cut 	= WHERE(cell.level EQ lev, nlev)
@@ -1984,9 +1995,10 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 			xx 	= cell.xx(cut)
 			yy 	= cell.yy(cut)
 			zz 	= cell.zz(cut)
-			tempdum	= tempdum(cut,*)
+			tempdum	= temp(cut,*)
 			dx 	= cell.dx(cut(0))
 			integrity	+= nlev
+			print, 'here?'
 		ENDIF ELSE BEGIN
 			integrity	+= levind(lev,2)
 		ENDELSE
@@ -2045,11 +2057,12 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
 			larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map)
+
 	ENDFOR
 
 	IF integrity NE N_ELEMENTS(temp(*,0)) THEN BEGIN
 		self->errorout, 'levelind integrity is broken'
-		self->errorout, 'N_cell = ', STRTRIM(N_ELEMENTS(tmp(*,0)),2)
+		self->errorout, 'N_cell = ', STRTRIM(N_ELEMENTS(temp(*,0)),2)
 		self->errorout, 'N_lev  = ', STRTRIM(integrity,2)
 		STOP
 	ENDIF
@@ -2059,10 +2072,13 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 	IF amrtype EQ 'MW' THEN BEGIN
 		IF KEYWORD_SET(memeff) THEN RETURN, {map:map, denmap:denmap}
+
 		cut 	= WHERE(denmap GT 0., ncut)
+
 		IF ncut GE 1L THEN map(cut) /= denmap(cut)
 
 		cut 	= WHERE(denmap EQ 0., ncut)
+
 		IF ncut GE 1L THEN map(cut) = 0.d
 
 

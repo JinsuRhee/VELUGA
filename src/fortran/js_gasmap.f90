@@ -58,6 +58,7 @@
         DO k=ny0, ny1
           CALL grid_geometry(j, k, dx, dy, xr(1), yr(1), xx(i), yy(i), bw(1), bw(2), geometry)
 
+
           map(j,k,2)    = map(j,k,2) + zz(i,2) * geometry * bw(1)
 
           IF(amrtype .EQ. 1) THEN !! Mass-weighted
