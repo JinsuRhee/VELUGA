@@ -1803,7 +1803,8 @@ FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, k
 		cut_neg 	= WHERE(density LT 0., ncut)
 		IF ncut GE 1L THEN density(cut_neg) = 0.d
 
-		density 	= density / TOTAL(density) * TOTAL(dz)
+		density 	= density / TOTAL(density) * TOTAL(dz) / delx / dely
+
 		RETURN, {x:ix, y:iy, z:density}
 	ENDELSE
 END
@@ -1829,6 +1830,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;		'VW'	- volume weighted
 	;;		'MAX'	- Maximum along LOS
 	;;		'CD'	- Column Denstiy
+	;;		'HIST'	- Histogram
 	;;
 	;;	minlev, maxlev: [1] long
 	;;		min and max amr level (if not set, a simulation value is employed)
@@ -1863,10 +1865,22 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	IF ~KEYWORD_SET(minlev) THEN minlev = info.levmin
 	IF ~KEYWORD_SET(maxlev) THEN maxlev = info.levmax
 
-	amrvar	= STRUPCASE(amrvar)
-	amrtype = STRUPCASE(amrtype)
+	amrvar	= [STRUPCASE(amrvar)]
+	amrtype = [STRUPCASE(amrtype)]
+	amrtype_l	= LONARR(N_ELEMENTS(amrvar))
 
-	IF amrtype EQ 'PR' THEN BEGIN
+	FOR ai=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
+		CASE amrtype(ai) OF
+			'MW'  : amrtype_l(ai) = 1
+			'VW'  : amrtype_l(ai) = 2
+			'MAX' : amrtype_l(ai) = 3
+			'CD'  : amrtype_l(ai) = 4
+			'HIST': amrtype_l(ai) = 5
+		ENDCASE
+	ENDFOR
+
+	cut 	= WHERE(amrtype EQ 'PR', ncut)
+	IF ncut GE 1L THEN BEGIN
 		IF ~KEYWORD_SET(xx0) THEN BEGIN
 			xx0 = [0.d, 0.d, 0.d]
 			self->errourout, 'Centarl position is not given to compute extenral pressure'
@@ -1886,12 +1900,12 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;-----
 	;; ALLOCATE
 	;;-----
-	temp 	= DBLARR(cell.n, 2)
+	temp 	= DBLARR(cell.n, 1L + N_ELEMENTS(amrvar))
 	;temp 	= DBLARR(cell.N, 2)
 		;; 0 as variable
 		;; 1 as density (for MW)
 
-	temp(*,1) 	= cell.den
+	temp(*,0) 	= cell.den
 
 	;; Sun chemistry (Asplund 09)
 	sun_N_o_H	= 10.d^(7.83d - 12.d) ;; [#_N / #_H]
@@ -1902,73 +1916,79 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	sun_S_o_H	= 10.d^(7.12d - 12.d)
 	sun_Fe_o_H	= 10.d^(7.50d - 12.d)
 
-	CASE amrvar OF
-		'D' : temp(*,0) = cell.den
-		'T' : temp(*,0) = cell.temp
-		'PT': temp(*,0) = cell.P_thermal
-		'PR': temp(*,0) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
-		'Z' : temp(*,0) = cell.zp
+	FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
+	CASE amrvar(i) OF
+		'D' : temp(*,i+1L) = cell.den
+		'T' : temp(*,i+1L) = cell.temp
+		'PT': temp(*,i+1L) = cell.P_thermal
+		'PR': temp(*,i+1L) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
+		'Z' : temp(*,i+1L) = cell.zp
 		'O/FE' 	: BEGIN
 			N_X 	= cell.chem_O / 15.999d
 			N_H 	= cell.chem_H
 			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_O_o_H) - ALOG10(sun_Fe_o_H))
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_O_o_H) - ALOG10(sun_Fe_o_H))
 			END
 		'MG/FE' 	: BEGIN
 			N_X 	= cell.chem_Mg / 24.305d
 			N_H 	= cell.chem_H
 			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Mg_o_H) - ALOG10(sun_Fe_o_H))
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Mg_o_H) - ALOG10(sun_Fe_o_H))
 			END
 		'SI/FE' 	: BEGIN
 			N_X 	= cell.chem_Si / 28.0855d
 			N_H 	= cell.chem_H
 			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
 			END
 		'ALPHA/FE'	: BEGIN
 			N_X 	= cell.chem_Si / 28.0855d + cell.chem_O / 15.999d + cell.chem_Mg / 24.305d
 			N_H 	= cell.chem_H
 			N_Fe 	= cell.chem_Fe / 55.845d * 3.d
 			sOh 	= (sun_Mg_o_H + sun_Si_o_H + sun_O_o_H)
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sOh) - ALOG10(sun_Fe_o_H*3.d))
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sOh) - ALOG10(sun_Fe_o_H*3.d))
 			END
 		'S/FE' 	: BEGIN
 			N_X 	= cell.chem_S / 32.065d
 			N_H 	= cell.chem_H
 			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_S_o_H) - ALOG10(sun_Fe_o_H))
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_S_o_H) - ALOG10(sun_Fe_o_H))
 			END
 		'C/H' 	: BEGIN
 			N_X 	= cell.chem_C / 12.011d
 			N_H 	= cell.chem_H
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_C_o_H)
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(sun_C_o_H)
 			END
 		'N/H' 	: BEGIN
 			N_X 	= cell.chem_N / 14.0067d
 			N_H 	= cell.chem_H
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
 			END
 		'LIGHT/H' 	: BEGIN
 			N_X 	= cell.chem_N / 14.0067d + cell.chem_C / 12.011d
 			N_H 	= cell.chem_H * 2.d
 			soH 	= sun_N_o_H + sun_C_o_H
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(soh/2.)
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(soh/2.)
 			END
 		'FE/H' 	: BEGIN
 			N_X 	= cell.chem_Fe / 55.845d
 			N_H 	= cell.chem_H
-			temp(*,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_Fe_o_H)
+			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(sun_Fe_o_H)
 			END
-		'DUST1' : temp(*,0)	= cell.mp * cell.dust_1
-		'DUST2' : temp(*,0)	= cell.mp * cell.dust_2
-		'DUST3' : temp(*,0)	= cell.mp * cell.dust_3
-		'DUST4' : temp(*,0)	= cell.mp * cell.dust_4
-		'DUST' 	: temp(*,0)	= cell.mp * (cell.dust_1 + cell.dust_2 + cell.dust_3 + cell.dust_4)
+		'O'		: temp(*,i+1L)	= cell.chem_O * cell.mp / 15.999d
+		'SI'	: temp(*,i+1L)	= cell.chem_Si * cell.mp / 28.0855d
+		'MG'	: temp(*,i+1L)	= cell.chem_Mg * cell.mp / 24.305d
+		'FE'	: temp(*,i+1L)	= cell.chem_Fe * cell.mp / 55.845d
+
+		'DUST1' : temp(*,i+1L)	= cell.mp * cell.dust_1
+		'DUST2' : temp(*,i+1L)	= cell.mp * cell.dust_2
+		'DUST3' : temp(*,i+1L)	= cell.mp * cell.dust_3
+		'DUST4' : temp(*,i+1L)	= cell.mp * cell.dust_4
+		'DUST' 	: temp(*,i+1L)	= cell.mp * (cell.dust_1 + cell.dust_2 + cell.dust_3 + cell.dust_4)
 	ENDCASE
+	ENDFOR
 
-
-	map 	= DBLARR(n_pix, n_pix, 2)
+	map 	= DBLARR(n_pix, n_pix, 1L+N_ELEMENTS(amrvar))
 
 	;;-----
 	;; Compute
@@ -2026,8 +2046,12 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		larr = LONARR(20) & darr = DBLARR(20)
 
 		larr(0)	= N_ELEMENTS(xx)
-		larr(1) = n_pix
-		larr(2) = self.num_thread
+		larr(1) = N_ELEMENTS(amrvar)
+		larr(2) = n_pix
+		larr(3) = self.num_thread
+
+		darr(0) = info.cgs.kpc / ((xr(1)-xr(0))/n_pix*(yr(1)-yr(0))/n_pix)
+		;; column density unit conversion (> /cm^2)
 
 		CASE proj OF
 			'xy' : BEGIN
@@ -2048,15 +2072,10 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 				END
 		ENDCASE
 
-		CASE amrtype OF
-			'MW': larr(10) = 1
-			'VW': larr(10) = 2
-			'MAX':larr(10) = 3
-			'CD': larr(10) = 4
-		ENDCASE
+		
 
 		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
-			larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map)
+			larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map, amrtype_l)
 
 	ENDFOR
 
@@ -2067,36 +2086,44 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		STOP
 	ENDIF
 
-	denmap 	= REFORM(map(*,*,1), n_pix, n_pix)
-	map 	= REFORM(map(*,*,0), n_pix, n_pix)
+	;denmap 	= REFORM(map(*,*,0), n_pix, n_pix)
+	;map 	= REFORM(map(*,*,0), n_pix, n_pix)
 
-	IF amrtype EQ 'MW' THEN BEGIN
-		IF KEYWORD_SET(memeff) THEN RETURN, {map:map, denmap:denmap}
+	;;----- output
+	;dummymap	= DBLARR(n_pix, n_pix)
+	result 	= REPLICATE({amrvar:'', amrtype:'', map:DBLARR(n_pix,n_pix)}, N_ELEMENTS(amrvar)+1L)
 
-		cut 	= WHERE(denmap GT 0., ncut)
+	result(0).amrvar = 'M0'
+	result(0).map 	= REFORM(map(*,*,0), n_pix, n_pix)
 
-		IF ncut GE 1L THEN map(cut) /= denmap(cut)
+	FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
+		result(i+1L).amrvar = amrvar(i)
+		result(i+1L).amrtype= amrtype(i)
+		result(i+1L).map 	= REFORM(map(*,*,i+1L),n_pix, n_pix)
+	ENDFOR
+	
+	IF KEYWORD_SET(memeff) THEN RETURN, result
 
-		cut 	= WHERE(denmap EQ 0., ncut)
-
-		IF ncut GE 1L THEN map(cut) = 0.d
-
-
-	ENDIF ELSE IF amrtype EQ 'CD' THEN BEGIN
-
-		;; /cm^3 * kpc^3
-		binX = (xr(1)-xr(0))/n_pix ;; [kpc]
-		binY = (yr(1)-yr(0))/n_pix ;; [kpc]
-
-		map 	/= (binX*binY)		;; /cm^3 * kpc
-		map 	*= info.cgs.kpc 	;; /cm^2
-
-		IF KEYWORD_SET(memeff) THEN RETURN, {map:map}
+	cut 	= WHERE(result(0).map GT 0., ncut)
+	IF ncut GE 1L THEN BEGIN
+		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
+			CASE amrtype(i) OF
+				'MW': result(i+1L).map(cut) /= result(0).map(cut)
+			ENDCASE
+		ENDFOR
 	ENDIF
 
-	IF KEYWORD_SET(memeff) THEN RETURN, {map:map}
+	cut 	= WHERE(result.m0 EQ 0., ncut)
+	IF ncut GE 1L THEN BEGIN
+		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
+			CASE amrtype(i) OF
+				'MW': result(i+1L).map(cut) = 0.d
+			ENDCASE
+		ENDFOR
+	ENDIF
 
-	RETURN, map
+
+	RETURN, result
 END
 
 ;;-----
