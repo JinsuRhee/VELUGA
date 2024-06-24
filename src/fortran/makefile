@@ -58,7 +58,7 @@ gcc -shared -fopenmp -mcmodel=large js_kde_gauss_pts.o js_kde_gauss_pts_c2f.o -o
 
 gfortran -fopenmp -fPIC -mcmodel=large -c js_gasmap.f90 -o js_gasmap.o
 gcc -fopenmp -fPIC -mcmodel=large -c js_gasmap_c2f.c -o js_gasmap_c2f.o
-gcc -shared -fopenmp -mcmodel=large js_gasmap.o js_gasmap_c2f.o fft/fftlib.o -o js_gasmap.so -lgfortran
+gcc -shared -fopenmp -mcmodel=large js_gasmap.o js_gasmap_c2f.o -o js_gasmap.so -lgfortran
 
 gfortran -fopenmp -fPIC -fno-range-check -c get_hash.f90 -o get_hash.o
 gcc -fopenmp -fPIC -c get_hash_c2f.c -o get_hash_c2f.o
