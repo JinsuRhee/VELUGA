@@ -3,7 +3,7 @@
 void js_gasmap(int argc, void *argv[])
 {
   extern void js_gasmap_();   /* FORTRAN routine */
-  int *larr;
+  int *larr, *amrtype;
   double *darr;
   double *xx, *yy, *zz, *bw, *xr, *yr, *map;
 
@@ -16,6 +16,7 @@ void js_gasmap(int argc, void *argv[])
   xr	= (double *)	argv[6];
   yr	= (double *)	argv[7];
   map	= (double *)	argv[8];
+  amrtype=(int *)	argv[9];
 
-  js_gasmap_(larr, darr, xx, yy, zz, bw, xr, yr, map);   /* Compute sum */
+  js_gasmap_(larr, darr, xx, yy, zz, bw, xr, yr, map, amrtype);   /* Compute sum */
 }

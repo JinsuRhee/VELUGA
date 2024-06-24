@@ -153,7 +153,7 @@ END
 ;;-----
 ;; Determine ending point
 ;;-----
-PRO velgua_ctree_detend, settings, data, complete_tree, tree_key
+PRO veluga_ctree_detend, settings, data, complete_tree, tree_key
 	;snapinfo 	= settings.snapinfo
 	cut     = WHERE(data.stat EQ 'C', ncut)
 
@@ -877,7 +877,7 @@ END
 ;;-----
 PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 
-	print, 'argument check'
+	
 	;;-----
 	;; CALL OBJECT
 	;;-----
@@ -895,10 +895,8 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 
 	TIC & TOC
 
-;	snapdata 	= veluga_ctree_getsnapinfo(settings, veluga)
-;SAVE, filename='~/scratch/snapdata.sav', snapdata
-print, 'here'
-RESTORE, '~/scratch/snapdata.sav'
+	snapdata 	= veluga_ctree_getsnapinfo(settings, veluga)
+
 
 	settings	= CREATE_STRUCT(settings, 'veluga', veluga, 'sinfo', snapdata.sinfo, 'slist', snapdata.slist)
 	
@@ -910,11 +908,8 @@ RESTORE, '~/scratch/snapdata.sav'
 	;;-----
 	;; ALLOCATE
 	;;-----
-	;gal 	= veluga->r_gal(MAX(settings.ctree_snap), -1L, horg=horg, GProp=['ID'])
-	;data 	= veluga_ctree_allocate(settings, complete_tree, tree_key, N_ELEMENTS(gal))
-;save, filename='~/scratch/new_data.sav', gal, data
-print, 'here'
-RESTORE, '~/scratch/new_data.sav'
+	gal 	= veluga->r_gal(MAX(settings.ctree_snap), -1L, horg=horg, GProp=['ID'])
+	data 	= veluga_ctree_allocate(settings, complete_tree, tree_key, N_ELEMENTS(gal))
 
 	ng0 	= 0L
 	ng1 	= N_ELEMENTS(gal)-1L
@@ -930,13 +925,12 @@ RESTORE, '~/scratch/new_data.sav'
 	;;-----
 	FOR i=N_ELEMENTS(settings.slist)-1L, 0L, -1L DO BEGIN
 		
-		c_snap 	= settings.slist(i)
 
+		c_snap 	= settings.slist(i)
 		PRINT, '%123123-----'
         PRINT, ''
         PRINT, '                TREE CONNECTION AT SNAP = ' + STRING(c_snap,format='(I4.4)') + ' ( ' + STRING(N_ELEMENTS(data),format='(I6)') + ' gals )'
 
-      
 
         ;;-----
         ;; CLASSIFY GALAXIES WITH BROKEN TREES
@@ -953,7 +947,7 @@ RESTORE, '~/scratch/new_data.sav'
         ;; Determine End point
         ;;-----
         TIC
-        velgua_ctree_detend, settings, data, complete_tree, tree_key
+        veluga_ctree_detend, settings, data, complete_tree, tree_key
        	TOC, elapsed_time=t_detend
 
        	;;-----
