@@ -659,7 +659,7 @@ FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
 
 		IF i0 EQ 0L THEN i1 = i + i - i0
 		IF i1 EQ nn-1L THEN i0 = i - (i1-i)
-		
+
 		dummy 	= yy(i0:i1)
 
 
@@ -2197,7 +2197,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		ENDFOR
 	ENDIF
 
-	cut 	= WHERE(result.m0 EQ 0., ncut)
+	cut 	= WHERE(result(0).map EQ 0., ncut)
 	IF ncut GE 1L THEN BEGIN
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
