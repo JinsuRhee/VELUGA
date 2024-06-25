@@ -651,6 +651,7 @@ FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
 			ind0 	= 0L
 			ind1 	= nn-1L
 			dn 	 	= 1L
+			END
 		ELSE: BEGIN
 			self->errorout, 'wrong direction for mafit: check MA_direction'
 			STOP
