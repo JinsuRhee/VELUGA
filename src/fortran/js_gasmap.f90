@@ -72,23 +72,28 @@
     
 
               !Store mass map
-              map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
+              !map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
     
               DO l=1, n_amr
                 IF(amrtype(l) .EQ. 1) THEN !! Mass-weighted
+                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
                         map(j,k,l+1) = map(j,k,l+1) + zz(i,l+1) * zz(i,1) * geometry * bw(1)
                 ELSE IF (amrtype(l) .EQ. 2) THEN !! Volume-weighted
+                        map(j,k,1) = map(j,k,1) + geometry*bw(1)
                         map(j,k,l+1) = map(j,k,l+1) + zz(i,l+1) * geometry * bw(1)
                 ELSE IF (amrtype(l) .EQ. 3) THEN !! MAX
+                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
                         !map(j,k,1) = MAX(map(j,k,1), geometry * zz(i,1))
                         map(j,k,l+1) = MAX(map(j,k,l+1), zz(i,l+1))
                 ELSE IF (amrtype(l) .EQ. 4) THEN !! Column Density
+                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
                         map(j,k,l+1)    = map(j,k,l+1) + zz(i,1)*geometry*bw(1) * darr(1)
                         !map(j,k,1) = map(j,k,1) + zz(i,2)*geometry*(xr(2)-xr(1))
                         !map(j,k,1) = map(j,k,1) + zz(i,2) * geometry * bw(1) / (dx*dy)
                         !map(j,k,1) = map(j,k,1) + zz(i,2) * geometry * bw(1) * zz(i,2)
                         !map(j,k,1) = map(j,k,1) + bw(1)!zz(i,1) * geometry *bw(1)**3
                 ELSE IF (amrtype(l) .EQ. 5) THEN !! HISTOGRAM
+                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
                         map(j,k,l+1) = map(j,k,l+1) + zz(i,l+1)*(geometry/(bw(1)*bw(2)))
                 ENDIF
               ENDDO
