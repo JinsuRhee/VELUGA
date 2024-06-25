@@ -647,6 +647,10 @@ FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
 			ind1 	= 0L
 			dn 		= -1L
 			END
+		'N': BEGIN
+			ind0 	= 0L
+			ind1 	= nn-1L
+			dn 	 	= 1L
 		ELSE: BEGIN
 			self->errorout, 'wrong direction for mafit: check MA_direction'
 			STOP
@@ -660,7 +664,8 @@ FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
 		IF i0 EQ 0L THEN i1 = i + i - i0
 		IF i1 EQ nn-1L THEN i0 = i - (i1-i)
 
-		dummy 	= yy(i0:i1)
+		IF dir EQ 'F' OR dir EQ 'B' THEN dummy 	= yy(i0:i1) ELSE dummy = yy2(i0:i1)
+		
 
 
 		IF ~KEYWORD_SET(sigma) THEN BEGIN
@@ -691,7 +696,8 @@ FUNCTION veluga::g_smooth, xx, yy, type=type, $
 	;;
 	;;	MA_direction: [1] string
 	;;		direction of filter
-	;;		'F' or 'B'
+	;;		'F' or 'B' as forward or backward
+	;;		'N' by no movements
 	;;
 	;;	MA_nsigma: [1] float/double
 	;;		sigma-clipping for computing average
