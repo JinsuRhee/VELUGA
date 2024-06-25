@@ -662,8 +662,8 @@ FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
     	i0 	= (i - LONG(nstep)/2) > 0L
 		i1 	= (i + LONG(nstep)/2) < (nn-1L)
 
-		IF i0 EQ 0L THEN i1 = i + i - i0
-		IF i1 EQ nn-1L THEN i0 = i - (i1-i)
+		IF i0 EQ 0L THEN i1 = (i + i - i0) < (nn-1L)
+		IF i1 EQ nn-1L THEN i0 = (i - (i1-i)) > 0L
 
 		IF dir EQ 'F' OR dir EQ 'B' THEN dummy 	= yy(i0:i1) ELSE dummy = yy2(i0:i1)
 		
