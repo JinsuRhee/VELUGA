@@ -630,6 +630,90 @@ FUNCTION veluga::g_boundind, xx=x, yy=y, zz=z, xr=xr, yr=yr, zr=zr
 
 	RETURN, {ind:ind, n:nn}
 END
+
+;;----- Smoothing related
+FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
+	yy 	= yy2
+	nn 	= N_ELEMENTS(yy)
+
+	CASE dir OF
+		'F': BEGIN
+			ind0 	= 0L
+			ind1 	= nn-1L
+			dn 		= 1L
+			END
+		'B': BEGIN
+			ind0 	= nn-1L
+			ind1 	= 0L
+			dn 		= -1L
+			END
+		ELSE: BEGIN
+			self->errorout, 'wrong direction for mafit: check MA_direction'
+			STOP
+			END
+	ENDCASE
+
+    FOR i=ind0, ind1, dn DO BEGIN
+    	i0 	= (i - LONG(nstep)/2) > 0L
+		i1 	= (i + LONG(nstep)/2) < (nn-1L)
+
+		IF i0 EQ 0L THEN i1 = i + i - i0
+		IF i1 EQ nn-1L THEN i0 = i - (i1-i)
+		
+		dummy 	= yy(i0:i1)
+
+
+		IF ~KEYWORD_SET(sigma) THEN BEGIN
+			yy(i) 	= MEAN(dummy)
+		ENDIF ELSE BEGIN
+			avg 	= MEAN(dummy)
+			std 	= STDDEV(dummy)
+			cut 	= WHERE( ABS(dummy - avg) LT std*n_sigma)
+			yy(i) 	= MEAN( dummy(cut) )
+		ENDELSE
+	ENDFOR
+
+	RETURN, yy
+END
+
+FUNCTION veluga::g_smooth, xx, yy, type=type, $
+	MA_step=MA_step, MA_direction=MA_direction, MA_nsigma=MA_nsigma
+	;;-----
+	;; Line smoothing with different algorithm
+	;;	xx, yy: [N] float/double
+	;;
+	;;  type: [1] string
+	;;		'MA': moving average. MA_step & MA_direction should be argued
+	;;
+	;;
+	;;	MA_step: [1] integer
+	;;		filter width for computing average
+	;;
+	;;	MA_direction: [1] string
+	;;		direction of filter
+	;;		'F' or 'B'
+	;;
+	;;	MA_nsigma: [1] float/double
+	;;		sigma-clipping for computing average
+	;;		e.g., MA_nsigma=3 means that an average is computed with points within 3 sigma
+	;;	
+	;;
+	;;-----
+
+	IF ~KEYWORD_SET(type) THEN type = 'MA'
+	type 	= STRUPCASE(type)
+
+	CASE type OF
+		'MA': BEGIN
+			IF ~KEYWORD_SET(MA_step) THEN MA_step = 5L
+			IF ~KEYWORD_SET(MA_direction) THEN MA_direction = 'F'
+			IF ~KEYWORD_SET(MA_nsigma) THEN MA_nsigma = -1.d
+			MA_direction 	= STRUPCASE(MA_direction)
+			RETURN, self->g_smooth_mafit(xx, yy, MA_step, MA_direction, MA_nsigma)
+			END
+	ENDCASE
+
+END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;	-- RAMSES RELATED
