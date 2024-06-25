@@ -2193,6 +2193,10 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
 				'MW': result(i+1L).map(cut) /= result(0).map(cut)
+				'VW': result(i+1L).map(cut) /= result(0).map(cut)
+				'MAX':
+				'CD':
+				'HIST':
 			ENDCASE
 		ENDFOR
 	ENDIF
@@ -2202,6 +2206,10 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
 				'MW': result(i+1L).map(cut) = 0.d
+				'VW': result(i+1L).map(cut) /= result(0).map(cut)
+				'MAX':
+				'CD':
+				'HIST':
 			ENDCASE
 		ENDFOR
 	ENDIF
