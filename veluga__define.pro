@@ -2177,23 +2177,23 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;dummymap	= DBLARR(n_pix, n_pix)
 	result 	= REPLICATE({amrvar:'', amrtype:'', map:DBLARR(n_pix,n_pix)}, N_ELEMENTS(amrvar)+1L)
 
-	result(0).amrvar = 'M0'
-	result(0).map 	= REFORM(map(*,*,0), n_pix, n_pix)
+	result(-1).amrvar = 'M0'
+	result(-1).map 	= REFORM(map(*,*,0), n_pix, n_pix)
 
 	FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
-		result(i+1L).amrvar = amrvar(i)
-		result(i+1L).amrtype= amrtype(i)
-		result(i+1L).map 	= REFORM(map(*,*,i+1L),n_pix, n_pix)
+		result(i).amrvar = amrvar(i)
+		result(i).amrtype= amrtype(i)
+		result(i).map 	= REFORM(map(*,*,i+1L),n_pix, n_pix)
 	ENDFOR
 	
 	IF KEYWORD_SET(memeff) THEN RETURN, result
 
-	cut 	= WHERE(result(0).map GT 0., ncut)
+	cut 	= WHERE(result(-1).map GT 0., ncut)
 	IF ncut GE 1L THEN BEGIN
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
-				'MW': result(i+1L).map(cut) /= result(0).map(cut)
-				'VW': result(i+1L).map(cut) /= result(0).map(cut)
+				'MW': result(i).map(cut) /= result(0).map(cut)
+				'VW': result(i).map(cut) /= result(0).map(cut)
 				'MAX':
 				'CD':
 				'HIST':
@@ -2201,12 +2201,12 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		ENDFOR
 	ENDIF
 
-	cut 	= WHERE(result(0).map EQ 0., ncut)
+	cut 	= WHERE(result(-1).map EQ 0., ncut)
 	IF ncut GE 1L THEN BEGIN
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
-				'MW': result(i+1L).map(cut) = 0.d
-				'VW': result(i+1L).map(cut) /= result(0).map(cut)
+				'MW': result(i).map(cut) = 0.d
+				'VW': result(i).map(cut) /= result(0).map(cut)
 				'MAX':
 				'CD':
 				'HIST':
