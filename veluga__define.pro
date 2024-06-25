@@ -2192,8 +2192,8 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	IF ncut GE 1L THEN BEGIN
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
-				'MW': result(i).map(cut) /= result(0).map(cut)
-				'VW': result(i).map(cut) /= result(0).map(cut)
+				'MW': result(i).map(cut) /= result(-1).map(cut)
+				'VW': result(i).map(cut) /= result(-1).map(cut)
 				'MAX':
 				'CD':
 				'HIST':
@@ -2206,7 +2206,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
 			CASE amrtype(i) OF
 				'MW': result(i).map(cut) = 0.d
-				'VW': result(i).map(cut) /= result(0).map(cut)
+				'VW': result(i).map(cut) = 0.d
 				'MAX':
 				'CD':
 				'HIST':
