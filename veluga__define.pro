@@ -1563,8 +1563,8 @@ PRO veluga::g_potential, cell, part, $
 	;; ALLOCATE
 	;;-----
 
-	npart 	= N_ELEMENTS(part)
-	ncell 	= N_ELEMENTS(cell)
+	npart 	= N_ELEMENTS(part.xx)
+	ncell 	= N_ELEMENTS(cell.xx)
 
 	pos 	= DBLARR(npart+ncell,3)
 	mass 	= DBLARR(npart+ncell)
