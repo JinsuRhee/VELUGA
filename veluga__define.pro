@@ -1257,7 +1257,7 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	part 	= self->g_part(snap0, 0.d, 0.d, 0.d, 0.d, dom_list=dom_all)
 
 	dm_ind 	= WHERE(part.family EQ 1L, nn_dm)
-	part 	= part(dm_ind)
+	part 	= self->g_extract(part, dm_ind)
 	xp 	= DBLARR(N_ELEMENTS(part),3)
 	xp(*,0)	= part.xx
 	xp(*,1)	= part.yy
