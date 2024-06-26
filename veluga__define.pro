@@ -1536,12 +1536,13 @@ FUNCTION veluga::g_sbf, lum, size, band
 	RETURN, sbf
 END
 
-PRO veluga::g_potential, cell, part, $
+FUNCTION veluga::g_potential, xx, yy, zz, mm, $
 	p_type=p_type, e_type=e_type, bsize=bsize
 
 	;;-----
 	;; Compute potential using all mass components
 	;;
+	;;		PE in [(km/s)^2]
 	;;-----
 
 	settings 	= self->getheader()
@@ -1562,31 +1563,18 @@ PRO veluga::g_potential, cell, part, $
 	;;-----
 	;; ALLOCATE
 	;;-----
+	npart 	= N_ELEMENTS(xx)
+	pos 	= DBLARR(npart,3)
+	mass 	= DOUBLE(mm)
 
-	npart 	= N_ELEMENTS(part.xx)
-	ncell 	= N_ELEMENTS(cell.xx)
+	pos(*,0) 	= xx
+	pos(*,1) 	= yy
+	pos(*,2) 	= zz
 
-	pos 	= DBLARR(npart+ncell,3)
-	mass 	= DBLARR(npart+ncell)
-
-	pos(0L:npart-1L,0) 	= part.xx
-	pos(0L:npart-1L,1) 	= part.yy
-	pos(0L:npart-1L,2) 	= part.zz
-	mass(0L:npart-1L) 	= part.mp
-
-	cut_part	= WHERE(part.family NE 1L AND part.family NE 2L, ntracer)
-	IF ntracer GE 1L THEN mass(cut_part) = 0.d
-
-	pos(npart:npart+ncell-1L,0) 	= cell.xx
-	pos(npart:npart+ncell-1L,1) 	= cell.yy
-	pos(npart:npart+ncell-1L,2) 	= cell.zz
-	mass(npart:npart+ncell-1L)	 	= cell.mp
-
-	pot 	= DBLARR(npart+ncell)
-	force 	= DBLARR(npart+ncell)
+	pot 	= DBLARR(npart)
+	force 	= DBLARR(npart)
 	IF N_ELEMENTS(mass) LE bsize THEN bsize = 4L
 
-	STOP
 	;;-----
 	;; Compute potential
 	;;-----
@@ -1613,11 +1601,11 @@ PRO veluga::g_potential, cell, part, $
 	void 	= CALL_EXTERNAL(ftr_name, 'js_getpt_ft', $
 		larr, darr, pos, mass, pot, force)
 
-	part.PE 	= pot(0L:npart-1L) 		;; [km/s]^2
-	cell.PE 	= pot(npart:npart+ncell-1L)
+	;part.PE 	= pot(0L:npart-1L) 		;; [km/s]^2
+	;cell.PE 	= pot(npart:npart+ncell-1L)
 
 	;part(cut_part).KE 	= self->g_d3d( part(cut_part).vx, part(cut_part).vy, part(cut_part).vz, []
-	RETURN
+	RETURN, {PE:pot, force:force}
 END
 
 FUNCTION veluga::g_extract, array, ind
