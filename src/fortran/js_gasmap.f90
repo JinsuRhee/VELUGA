@@ -6,9 +6,9 @@
       REAL(KIND=8) darr(20)
       INTEGER(KIND=4) larr(20)
 
-      REAL(KIND=8) xx(larr(1)), yy(larr(1)), zz(larr(1),1+larr(2)+1)
+      REAL(KIND=8) xx(larr(1)), yy(larr(1)), zz(larr(1), larr(2), 2)
       REAL(KIND=8) bw(2), xr(2), yr(2)
-      REAL(KIND=8) map(larr(3), larr(3), 2)
+      REAL(KIND=8) map(larr(3), larr(3), larr(2), 2)
       INTEGER(KIND=4) amrtype(larr(2))
 
       !!!!!
@@ -63,7 +63,7 @@
                     ny0 = ny
                     ny1 = ny
             ENDIF
-    
+
             DO j=nx0, nx1
             DO k=ny0, ny1
               !compute partial volume
@@ -76,25 +76,25 @@
     
               DO l=1, n_amr
                 IF(amrtype(l) .EQ. 1) THEN !! Mass-weighted
-                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
-                        map(j,k,l+1) = map(j,k,l+1) + zz(i,l+1) * zz(i,1) * geometry * bw(1)
+                        map(j,k,l,2) = map(j,k,l,2) + zz(i,l,2) * geometry * bw(1)
+                        map(j,k,l,1) = map(j,k,l,1) + zz(i,l,1) * zz(i,l,2) * geometry * bw(1)
                 ELSE IF (amrtype(l) .EQ. 2) THEN !! Volume-weighted
-                        map(j,k,1) = map(j,k,1) + geometry*bw(1)
-                        map(j,k,l+1) = map(j,k,l+1) + zz(i,l+1) * geometry * bw(1)
+                        map(j,k,l,2) = map(j,k,l,2) + geometry*bw(1)
+                        map(j,k,l,1) = map(j,k,l,1) + zz(i,l,1) * geometry * bw(1)
                 ELSE IF (amrtype(l) .EQ. 3) THEN !! MAX
-                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
+                        !map(j,k,l,2)    = map(j,k,l,2) + zz(i,l,2) * geometry * bw(1)
                         !map(j,k,1) = MAX(map(j,k,1), geometry * zz(i,1))
-                        map(j,k,l+1) = MAX(map(j,k,l+1), zz(i,l+1))
+                        map(j,k,l,1) = MAX(map(j,k,l,1), zz(i,l,1))
                 ELSE IF (amrtype(l) .EQ. 4) THEN !! Column Density
-                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
-                        map(j,k,l+1)    = map(j,k,l+1) + zz(i,1)*geometry*bw(1) * darr(1)
+                        !map(j,k,l,2)    = map(j,k,l,2) + zz(i,l,2) * geometry * bw(1)
+                        map(j,k,l,1)    = map(j,k,l,1) + zz(i,l,1)*geometry*bw(1)*darr(1)
                         !map(j,k,1) = map(j,k,1) + zz(i,2)*geometry*(xr(2)-xr(1))
                         !map(j,k,1) = map(j,k,1) + zz(i,2) * geometry * bw(1) / (dx*dy)
                         !map(j,k,1) = map(j,k,1) + zz(i,2) * geometry * bw(1) * zz(i,2)
                         !map(j,k,1) = map(j,k,1) + bw(1)!zz(i,1) * geometry *bw(1)**3
                 ELSE IF (amrtype(l) .EQ. 5) THEN !! HISTOGRAM
-                        map(j,k,1)    = map(j,k,1) + zz(i,1) * geometry * bw(1)
-                        map(j,k,l+1) = map(j,k,l+1) + zz(i,l+1)*(geometry/(bw(1)*bw(2)))
+                        !map(j,k,l,2)    = map(j,k,l,2) + zz(i,l,2) * geometry * bw(1)
+                        map(j,k,l,1) = map(j,k,l,1) + zz(i,l,1)*(geometry/(bw(1)*bw(2)))
                 ENDIF
               ENDDO
     

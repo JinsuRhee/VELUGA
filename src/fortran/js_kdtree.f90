@@ -292,7 +292,11 @@ CONTAINS
         !!----- FIRST EXTRACT TARGET
 
         DO i=1, info%ndim
-          node(numnode)%cen(i) = SUM(pos(bstart:bend,i) * mm(bstart:bend)) / SUM(mm(bstart:bend))
+          IF(SUM(mm(bstart:bend)) .GT. 0) THEN
+            node(numnode)%cen(i) = SUM(pos(bstart:bend,i) * mm(bstart:bend)) / SUM(mm(bstart:bend))
+          ELSE
+            node(numnode)%cen(i) = SUM(pos(bstart:bend,i)) / (bend-bstart + 1.)
+          ENDIF
         ENDDO
 
         ! for dmax
