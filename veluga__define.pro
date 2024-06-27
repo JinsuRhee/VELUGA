@@ -499,6 +499,15 @@ END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;-----
+FUNCTION veluga::g_wmean, xx, ww
+	RETURN, TOTAL(xx * ww) / TOTAL(ww)
+END
+
+FUNCTION veluga::g_wstddev, xx, ww
+	m 	= self->g_wmean(xx, ww)
+	RETURN, SQRT( TOTAL( ww * (xx - m)^2 ) / TOTAL(ww) )
+END
+
 FUNCTION veluga::g_unique, array
 	dum	= array & dum = dum(SORT(dum)) & dum = dum(UNIQ(dum)) & RETURN, dum
 END
@@ -1165,7 +1174,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.zp 	= mesh_hd(*,5)
 	cell.mp 	= mesh_mp
 
-	cell.UE 	= mesh_hd(*,4)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
+	cell.UE 	= mesh_hd(*,4)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 / toKmu ;; [km/s]^2
 	cell.p_thermal = mesh_hd(*,4)*mesh_hd(*,0) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
 
 	cell.levelind 	= [levelind(0,*), levelind]
@@ -1661,6 +1670,169 @@ FUNCTION veluga::g_extract, array, ind
 	RETURN, array2
 
 END
+
+FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_list=dom_list, n_shell=n_shell
+
+	;;-----
+	;; Get Cell type (ISM, CGM, IGM) around the given center
+	;; 		Cell is classified based on Rhee+24
+	;; 		PE & KE are measured and stored in the cell array
+	;;		Particles (< rc) are used to compute potential
+	;;		Cells outside the paerture are classified as IGM (and are not used for potential calculation)
+	;; 
+	;;
+	;; Result: [N] integer
+	;;		N is the number of cell
+	;;		1  ISM
+	;;		0  CGM
+	;; 		-1 IGM (or surrounding cell)
+	;;	
+	;;	n_snap: [1] integer
+	;;		snapshot number
+	;;
+	;;	cell: [] cell array
+	;;
+	;; 	xc, yc, zc, rr: [1] double
+	;;		center & radius in kpc unit
+	;;
+	;;	vxc, vyc, vzc: [1] double
+	;;		velocity of the center to get the relative velocities
+	;;
+	;;	dom_list: [N] integer
+	;;		domain_list
+	;;		If set, read all cells in the argued domain. If not, read all cells inside rr2 + dx
+	;;
+	;;	n_shell: [1] integer
+	;;		# of radial bins when computing metallicity radial distribution of ISM to distinguish IGM / CGM
+	;;-----
+
+	IF ~KEYWORD_SET(dom_list) THEN BEGIN
+		dom_list 	= self->g_domain(n_snap, xc, yc, zc, rc*2.d)
+	ENDIF
+
+	IF ~KEYWORD_SET(n_shell) THEN n_shell = 100L
+
+	c_d3d 	= self->g_d3d(cell.xx, cell.yy, cell.zz, [xc, yc, zc])
+	c_outside 	= WHERE(c_d3d GT rc, nc_outside)
+
+	;;----- Read Part	
+	part 	= self->g_part(n_snap, 0.d, 0.d, 0.d, 0.d, dom_list=dom_list)
+
+	;;----- Get Part within the aperture
+	p_d3d 	= self->g_d3d(part.xx, part.yy, part.zz, [xc, yc, zc])
+	p_ind	= WHERE( (part.family EQ 1L OR part.family EQ 2L) AND p_d3d LT rc , np)
+	IF np EQ 0L THEN STOP
+	part 	= self->g_extract(part, p_ind)
+
+	
+	;;-----
+	;; Get Potential
+	;;-----
+	nc 	= cell.n
+	nn 	= np + nc
+	dumx 	= DBLARR(nn)
+	dumy 	= DBLARR(nn)
+	dumz 	= DBLARR(nn)
+	dumm 	= DBLARR(nn)
+
+	dumx(0L:nc-1L)	 	= cell.xx
+	dumx(nc:np+nc-1L)	= part.xx
+
+	dumy(0L:nc-1L)	 	= cell.yy
+	dumy(nc:np+nc-1L)	= part.yy
+
+	dumz(0L:nc-1L)	 	= cell.zz
+	dumz(nc:np+nc-1L)	= part.zz
+
+	dumm(0L:nc-1L)	 	= cell.mp
+	IF nc_outside GE 1L THEN dumm(c_outside) = 0.d
+
+	dumm(nc:np+nc-1L)	= part.mp
+
+	pot 	= self->g_potential(dumx, dumy, dumz, dumm)
+	
+	cell.PE 	= pot.PE(0L:nc-1L)
+	;IF nc_outside GE 1L THEN cell.PE(c_outside) = 0.d
+
+	cell.KE 	= 0.5d * (self->g_d3d(cell.vx, cell.vy, cell.vz, [vxc, vyc, vzc]))^2
+
+	Etot 	= cell.PE + cell.KE + cell.UE
+	
+	;;-----
+	;; Cell type with metallicity condition
+	;;	1 : ISM
+	;;	0 : CGM
+	;;	-1: IGM
+	;;-----
+	cell_type 	= LONARR(N_ELEMENTS(Etot)) - 1L
+
+	Ecut 	= 0.d 		;; Energy cut for boundness
+	d_shell	= rc/n_shell
+	minZval	= 0.1 		;; Lower bound Metallicity for CGM
+	tempcut	= 1e7
+
+	;; ISM by Bound cells
+	cut 	= WHERE(Etot LT Ecut, ncut)
+	IF ncut GE 1L THEN cell_type(cut) = 1L
+
+	;; Compute radial metallicity distribution of ISM
+	ism_met	= DBLARR(n_shell,2)
+		ism_met(*,0)	= 1e8
+		ism_met(*,1)	= 0.
+
+	FOR i=0L, n_shell-1L DO BEGIN
+		r0 	= d_shell * i
+		r1 	= d_shell * (i+1.d)
+		
+		cut = WHERE(c_d3d GE r0 and c_d3d LT r1 AND cell_type EQ 1L, ncut)
+		IF ncut GE 0L THEN CONTINUE
+
+		ism_met(i,0)	= self->g_wmean(cell.zp(cut), cell.mp(cut))
+		ism_met(i,1) 	= self->g_wstddev(cell.zp(cut), cell.mp(cut))
+	ENDFOR
+
+	;; Extrapolate ism_met beyond the ISM boundary
+	FOR i=1L, n_shell-1L DO BEGIN
+		IF ism_met(i,0) GE 1e7 THEN BEGIN
+			ism_met(i,*)	= ism_met(i-1,*)
+		ENDIF
+	ENDFOR
+
+	;; CGM by 1) Positive E & 2) Z > MAX(Z_ism - dz_ism, minZval) 3) Outflowing & 4) T > 1e7K
+	vdot 	= (cell.xx - xc) * (cell.vx - vxc) + (cell.yy - yc) * (cell.vy - vyc) + (cell.zz - zc) * (cell.vz - vzc)
+	vdot0	= MAX(ABS(vdot)) * (-2.d)
+
+	FOR i=0L, n_shell-1L DO BEGIN
+		r0 	= d_shell*i
+		r1 	= d_shell*(i+1.d)
+
+		cut = WHERE(c_d3d GE r0 AND c_d3d LT r1 AND cell_type NE 1L, ncut) ;; here 1) is already satisfied
+		IF ncut EQ 0L THEN CONTINUE
+
+
+		met_avg	= self->g_wmean(cell.zp(cut), cell.mp(cut))
+		met_std = self->g_wstddev(cell.zp(cut), cell.mp(cut))
+
+		lowZval 	= MAX([minZval, ism_met(i,0) - ism_met(i,1)])
+
+
+		cut2 	= WHERE($
+			(c_d3d GE r0 AND c_d3d LT r1) AND $
+			cell_type NE 1L AND $ 		;; Condition 1)
+			cell.zp GT lowZval AND $	;; Condition 2)
+			vdot GT 0. AND $			;; Condition 3)
+			cell.temp GT tempcut $		;; Condition 4)
+			, nc2)
+
+		IF nc2 GE 1L THEN cell_type(cut2) = 0L
+	ENDFOR
+
+	;; IGM for left cells
+	cell_type(c_outside) 	= -1L
+	
+	RETURN, cell_type
+END
+
 ;;-----
 ;; DRAWING ROUTINES
 ;;-----
