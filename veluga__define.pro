@@ -1839,6 +1839,44 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 	RETURN, cell_type
 END
 
+FUNCTION veluga::g_cellphase, n_snap, cell
+
+	;;-----
+	;; Get Cell phase based on cold (warm) vs. hot based on the criterion by Torrey+12
+	;;
+	;; Result: [N] integer
+	;;		N is the number of cell
+	;;		2  SF (nH > 10 cc)
+	;;		1  cold
+	;;		-1 hot
+	;;	
+	;;	n_snap: [1] integer
+	;;		snapshot number
+	;;
+	;;	cell: [] cell array
+	;;
+	;;		density and temperature should be given in K and cc unit, respectively, which is the default output of g_cell
+	;;-----
+
+	info 	= self->g_info(n_snap)
+
+	den2    = ALOG10(cell.den) + ALOG10(1.6600000d-24)   ;; g/cc
+        den2    -= ALOG10(info.cgs.m_sun)   ;; Msun/cc
+        den2    += 3.*ALOG10(info.cgs.kpc)  ;; Msun/Kpc^3
+        den2    -= 2.*ALOG10(info.H0/100.)     ;; Msun h^2 / Kpc^3
+        den2    -= ALOG10(1e10)         ;; 1e10Msun h^2 / Kpc^3
+        den2    = 10.d^den2
+
+    phase	= LONARR(cell.n) - 1L
+    cut_cold= WHERE(ALOG10(cell.temp) LT 6. + 0.25 * ALOG10(den2), nc)
+    IF nc GE 1L THEN phase(cut_cold) = 1L
+
+    cut_sf 	= WHERE(cell.den GT 10., nsf)
+    IF nsf GE 1L THEN phase(cut_sf) = 2L
+
+    RETURN, phase
+END
+
 ;;-----
 ;; DRAWING ROUTINES
 ;;-----
