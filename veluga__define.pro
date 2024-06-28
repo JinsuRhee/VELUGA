@@ -1877,6 +1877,61 @@ FUNCTION veluga::g_cellphase, n_snap, cell
     RETURN, phase
 END
 
+FUNCTION veluga::g_vovers, xx, yy, zz, vx, vy, vz, mm
+	;;-----
+	;; Compute V_tan/sigma_1D for given 6D coordinates (relative to their center)
+	;;
+	;;-----
+
+	;;-----
+	;; Find Rotational Axis
+	;;-----
+	Lx0	= TOTAL(yy*vz*mm - zz*vy*mm) / TOTAL(mm)
+	Ly0	= TOTAL(zz*vx*mm - xx*vz*mm) / TOTAL(mm)
+	Lz0	= TOTAL(xx*vy*mm - yy*vx*mm) / TOTAL(mm)
+
+	rvec	= [Lx0, Ly0, Lz0]
+	rvec_z	= rvec / NORM(rvec)
+
+		const	= SQRT( (1. - rvec_z(0)^2 - rvec_z(1)^2) / (1. - rvec_z(1)^2) )
+	rvec_x	= [const, 0., SQRT(1. - const^2)]
+	rvec_y 	= CROSSP(rvec_z, rvec_x)
+
+	;;-----
+	;; Rotate the rotational axes
+	;;-----
+	xx0	= xx * rvec_x(0) + yy * rvec_x(1) + zz * rvec_x(2)
+	yy0	= xx * rvec_y(0) + yy * rvec_y(1) + zz * rvec_y(2)
+	zz0	= xx * rvec_z(0) + yy * rvec_z(1) + zz * rvec_z(2)
+
+	vx0	= vx * rvec_x(0) + vy * rvec_x(1) + vz * rvec_x(2)
+	vy0	= vx * rvec_y(0) + vy * rvec_y(1) + vz * rvec_y(2)
+	vz0	= vx * rvec_z(0) + vy * rvec_z(1) + vz * rvec_z(2)
+
+	;;-----
+	;; Cartesian to Cylinderical
+	;;-----
+	vz 	= vz0
+		norm1	= SQRT(xx0^2 + yy0^2)
+		ang1	= xx0 / norm1
+		ang2	= yy0 / norm1
+
+	vr 	= vx0*ang1 + vy0*ang2
+	vt 	= vx0*(-ang2) + vy0*ang1
+
+	;m_vt	= MEAN(vt)
+	;s_vr	= STDDEV(vr)
+	;s_vt	= STDDEV(vt)
+	;s_vz	= STDDEV(vz)
+	
+
+	m_vt	= self->g_WMEAN(vt, mm)
+	s_vr	= self->g_WSTDDEV(vr, mm)
+	s_vt	= self->g_WSTDDEV(vt, mm)
+	s_vz	= self->g_WSTDDEV(vz, mm)
+	RETURN, m_vt / SQRT( (s_vr^2 + s_vt^2 + s_vz^2) / 3. )
+END
+
 ;;-----
 ;; DRAWING ROUTINES
 ;;-----
