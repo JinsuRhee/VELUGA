@@ -1174,8 +1174,8 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.zp 	= mesh_hd(*,5)
 	cell.mp 	= mesh_mp
 
-	cell.UE 	= mesh_hd(*,4)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 / toKmu ;; [km/s]^2
-	cell.p_thermal = mesh_hd(*,4)*mesh_hd(*,0) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
+	cell.UE 	= (mesh_hd(*,4)/toKmu)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
+	cell.p_thermal = (mesh_hd(*,4)/toKmu)*(mesh_hd(*,0)/tocc) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
 
 	cell.levelind 	= [levelind(0,*), levelind]
 
