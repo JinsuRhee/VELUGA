@@ -88,6 +88,10 @@ CONTAINS
         CALL js_kdtree_buildnode(root, pos, mm, orgind, info2, &
                 numnode, bstart, bend, level)
 
+        IF(info2%bsize .LE. info%bsize) THEN
+          !!----- No need to make further son nodes
+          RETURN
+        ENDIF
 
         IF(ALLOCATED(root_p)) DEALLOCATE(root_p)
         ALLOCATE(root_p(1:numnode))
