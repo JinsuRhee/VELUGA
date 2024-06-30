@@ -93,6 +93,11 @@ CONTAINS
           RETURN
         ENDIF
 
+        IF(info2%bsize .LE. info%bsize*2.) THEN
+          !!----- Decrease bsize for tree stability
+          info%bsize = info%bsize/2
+        ENDIF
+
         IF(ALLOCATED(root_p)) DEALLOCATE(root_p)
         ALLOCATE(root_p(1:numnode))
         root_p = root(1:numnode)
