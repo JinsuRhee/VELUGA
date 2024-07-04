@@ -1958,7 +1958,7 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
 	;; mass, velocity are stored in ptcl array with 'mp' and 'vx, vy, vz' tag
 	;; celltype is stored in 'family' tag
 	;;-----
-	
+
 	IF ~KEYWORD_SET(celltype) THEN celltype = LONARR(cell.n) + 1L
 
 	;; Bound check
@@ -2007,7 +2007,50 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
 	RETURN
 END
 
-;;-----
+FUNCTION veluga::g_indmatch, x2, y2
+	;;-----
+	;; Give the matched element of each array
+	;;
+	;; Reulst: Structure of matched indices
+	;;
+	;; ex) x(i) = y(result.x(i))
+	;;	   y(i) = x(result.y(i))
+	;;	
+	;; x 	: [N] integer
+	;; y 	: [M] integer 
+	;;-----
+
+	x 	= LONG64(x2)
+	y 	= LONG64(y2)
+
+	;;----- AVOID NEGATIVE
+	minval 	= MIN([MIN(x), MIN(y)])
+	IF minval LT 0L THEN BEGIN
+		x -= minval
+		y -= minval
+	ENDIF
+
+	ftr_name 	= settings.dir_lib + '/src/fortran/js_indmatch.so'
+	larr = LONARR(20) & darr = DBLARR(20)
+	larr(0)	= self->num_thread
+	larr(1)	= N_ELEMENTS(x)
+	larr(2)	= N_ELEMENTS(y)
+
+	larr(10)	= 1L
+			;; search type
+			;; 1 - hash
+			;; 2 - binary search (not implemented)
+
+	x_match 	= x*0LL - 1LL
+	y_match 	= y*0LL - 1LL
+
+	void 	= CALL_EXTERNAL(ftr_name, 'js_indmatch', $
+		larr, darr, x, y, x_match, y_match)
+
+	RETURN, {x:x_match, y:y_match}
+END
+
+END
 ;;-----
 ;; DRAWING ROUTINES
 ;;-----
