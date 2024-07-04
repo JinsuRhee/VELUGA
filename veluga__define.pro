@@ -2030,6 +2030,7 @@ FUNCTION veluga::g_indmatch, x2, y2
 		y -= minval
 	ENDIF
 
+	settings 	= self->getheader()
 	ftr_name 	= settings.dir_lib + '/src/fortran/js_indmatch.so'
 	larr = LONARR(20) & darr = DBLARR(20)
 	larr(0)	= self.num_thread
