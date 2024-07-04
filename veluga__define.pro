@@ -2032,7 +2032,7 @@ FUNCTION veluga::g_indmatch, x2, y2
 
 	ftr_name 	= settings.dir_lib + '/src/fortran/js_indmatch.so'
 	larr = LONARR(20) & darr = DBLARR(20)
-	larr(0)	= self->num_thread
+	larr(0)	= self.num_thread
 	larr(1)	= N_ELEMENTS(x)
 	larr(2)	= N_ELEMENTS(y)
 
