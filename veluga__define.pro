@@ -1933,6 +1933,82 @@ FUNCTION veluga::g_vovers, xx, yy, zz, vx, vy, vz, mm
 END
 
 ;;-----
+
+FUNCTION veluga::g_tracertag_get3bits, n
+	n 	= (n OR ISHFT(n, 16)) AND 0x030000FF
+	n 	= (n OR ISHFT(n, 8 )) AND 0x0300F00F
+	n 	= (n OR ISHFT(n, 4 )) AND 0x030C30C3
+	n 	= (n OR ISHFT(n, 2 )) AND 0X09249249
+	RETURN, n
+END
+
+FUNCTION veluga::g_tracertag_getmorton, x, y, z
+	x_bits 	= self->g_tracertag_get3bits(x)
+	y_bits 	= self->g_tracertag_get3bits(y)
+	z_bits 	= self->g_tracertag_get3bits(z)
+
+	RETURN, x_bits OR ISHFT(y_bits,1) OR ISHFT(z_bits,2)
+END
+
+PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
+	;;-----
+	;; Give cell properties (velocity, mass and celltype if given) to tagged tracer ptcls
+	;; It is recommanded for (tracer ptcls) to have smaller range compared to cell
+	;;
+	;; mass, velocity are stored in ptcl array with 'mp' and 'vx, vy, vz' tag
+	;; celltype is stored in 'family' tag
+	;;-----
+	
+	IF ~KEYWORD_SET(celltype) THEN celltype = LONARR(cell.n) + 1L
+
+	;; Bound check
+	void 	= WHERE(ptcl.xx LT MIN(cell.xx) OR ptcl.xx GT MAX(cell.xx), nx)
+	void 	= WHERE(ptcl.yy LT MIN(cell.yy) OR ptcl.yy GT MAX(cell.yy), ny)
+	void 	= WHERE(ptcl.zz LT MIN(cell.zz) OR ptcl.zz GT MAX(cell.zz), nz)
+	IF nx + ny + nz GE 1L THEN BEGIN
+		self->errorout, 'there are tracer ptcls out of the box'
+	ENDIF
+
+
+
+	;;----- Get Initial Hash table
+	mindx 		= MIN(cell.dx)
+	cell_nx 	= LONG64((cell.xx + 0.1*mindx) / mindx)
+	cell_ny 	= LONG64((cell.yy + 0.1*mindx) / mindx)
+	cell_nz 	= LONG64((cell.zz + 0.1*mindx) / mindx)
+
+	cell_key 	= self->g_tracertag_getmorton(cell_nx, cell_ny, cell_nz)
+
+	cell_tbl 	= LONARR(MAX(cell_key))
+	cell_tbl(cell_key) 	= LINDGEN(N_ELEMENTS(cell_key))
+
+	;;----- Get Tracer Keys
+	ptcl_nx 	= LONG64((ptcl.xx + 0.1*mindx) / mindx)
+	ptcl_ny 	= LONG64((ptcl.yy + 0.1*mindx) / mindx)
+	ptcl_nz 	= LONG64((ptcl.zz + 0.1*mindx) / mindx)
+
+	
+	ptcl_key 	= self->g_tracertag_getmorton(ptcl_nx, ptcl_ny, ptcl_nz)
+	ptcl_ind 	= cell_tbl(ptcl_key)
+
+
+	;;----- Get # of tracer ptcls in each cell
+	ptcl_nn 	= LONARR(MAX(ptcl_ind)+1L)		;; use collections in python
+	ptcl_nn(ptcl_ind)	++
+	
+	;;----- Give Properties to tracer
+	ptcl.vx 	= cell.vx(ptcl_ind)
+	ptcl.vy 	= cell.vy(ptcl_ind)
+	ptcl.vz 	= cell.vz(ptcl_ind)
+
+	ptcl.family = celltype(ptcl_ind)	;; family is replaced with celltype
+	ptcl.mp		= cell.mp(ptcl_ind) / ptcl_nn(ptcl_ind)
+
+	RETURN
+END
+
+;;-----
+;;-----
 ;; DRAWING ROUTINES
 ;;-----
 FUNCTION veluga::d_minmax, map2, min2, max2, stype=stype, loga=loga
