@@ -2049,8 +2049,6 @@ FUNCTION veluga::g_indmatch, x2, y2
 
 	RETURN, {x:x_match, y:y_match}
 END
-
-END
 ;;-----
 ;; DRAWING ROUTINES
 ;;-----
