@@ -88,6 +88,15 @@ CONTAINS
         CALL js_kdtree_buildnode(root, pos, mm, orgind, info2, &
                 numnode, bstart, bend, level)
 
+        IF(info2%bsize .LE. info%bsize) THEN
+          !!----- No need to make further son nodes
+          RETURN
+        ENDIF
+
+        IF(info2%bsize .LE. info%bsize*2.) THEN
+          !!----- Decrease bsize for tree stability
+          info%bsize = info%bsize/2
+        ENDIF
 
         IF(ALLOCATED(root_p)) DEALLOCATE(root_p)
         ALLOCATE(root_p(1:numnode))
@@ -292,7 +301,11 @@ CONTAINS
         !!----- FIRST EXTRACT TARGET
 
         DO i=1, info%ndim
-          node(numnode)%cen(i) = SUM(pos(bstart:bend,i) * mm(bstart:bend)) / SUM(mm(bstart:bend))
+          IF(SUM(mm(bstart:bend)) .GT. 0) THEN
+            node(numnode)%cen(i) = SUM(pos(bstart:bend,i) * mm(bstart:bend)) / SUM(mm(bstart:bend))
+          ELSE
+            node(numnode)%cen(i) = SUM(pos(bstart:bend,i)) / (bend-bstart + 1.)
+          ENDIF
         ENDDO
 
         ! for dmax

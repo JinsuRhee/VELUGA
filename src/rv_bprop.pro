@@ -213,8 +213,8 @@ IF run EQ 2L THEN BEGIN
 	cdum_m	= REPLICATE({aper:DBLARR(n_aper)}, n_gal)
 	FOR i=0L, n_aper-1L DO cdum_n.aper(i) = cdum.n(*,i)
 	FOR i=0L, n_aper-1L DO cdum_m.aper(i) = cdum.m(*,i)
-	output	= CREATE_STRUCT(output, 'CONFRAC_M', cdum_n)
-	output	= CREATE_STRUCT(output, 'CONFRAC_N', cdum_m)
+	output	= CREATE_STRUCT(output, 'CONFRAC_M', cdum_m)
+	output	= CREATE_STRUCT(output, 'CONFRAC_N', cdum_n)
 	veluga->ppout2, ' - Contamination Fraction computed'
 	
 	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + '/rv_bprop.sav', output

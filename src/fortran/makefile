@@ -58,7 +58,7 @@ gcc -shared -fopenmp -mcmodel=large js_kde_gauss_pts.o js_kde_gauss_pts_c2f.o -o
 
 gfortran -fopenmp -fPIC -mcmodel=large -c js_gasmap.f90 -o js_gasmap.o
 gcc -fopenmp -fPIC -mcmodel=large -c js_gasmap_c2f.c -o js_gasmap_c2f.o
-gcc -shared -fopenmp -mcmodel=large js_gasmap.o js_gasmap_c2f.o fft/fftlib.o -o js_gasmap.so -lgfortran
+gcc -shared -fopenmp -mcmodel=large js_gasmap.o js_gasmap_c2f.o -o js_gasmap.so -lgfortran
 
 gfortran -fopenmp -fPIC -fno-range-check -c get_hash.f90 -o get_hash.o
 gcc -fopenmp -fPIC -c get_hash_c2f.c -o get_hash_c2f.o
@@ -71,3 +71,7 @@ gcc -shared -fopenmp get_merit.o get_merit_c2f.o -o get_merit.so -lgfortran
 gfortran -fopenmp -fPIC -mcmodel=large -fno-range-check -c get_merit2.f90 -o get_merit2.o
 gcc -fopenmp -fPIC -mcmodel=large -c get_merit2_c2f.c -o get_merit2_c2f.o
 gcc -shared -fopenmp get_merit2.o get_merit2_c2f.o -o get_merit2.so -lgfortran
+
+gfortran -fopenmp -fPIC -mcmodel=large -c js_indmatch.f90 -o js_indmatch.o
+gcc -fopenmp -fPIC -mcmodel=large -c js_indmatch_c2f.c -o js_indmatch_c2f.o
+gcc -shared -fopenmp -mcmodel=large js_indmatch.o js_indmatch_c2f.o -o js_indmatch.so -lgfortran

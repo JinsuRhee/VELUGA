@@ -499,6 +499,15 @@ END
 ;;-----
 ;; SIMPLE GET FTNS
 ;;-----
+FUNCTION veluga::g_wmean, xx, ww
+	RETURN, TOTAL(xx * ww) / TOTAL(ww)
+END
+
+FUNCTION veluga::g_wstddev, xx, ww
+	m 	= self->g_wmean(xx, ww)
+	RETURN, SQRT( TOTAL( ww * (xx - m)^2 ) / TOTAL(ww) )
+END
+
 FUNCTION veluga::g_unique, array
 	dum	= array & dum = dum(SORT(dum)) & dum = dum(UNIQ(dum)) & RETURN, dum
 END
@@ -629,6 +638,97 @@ FUNCTION veluga::g_boundind, xx=x, yy=y, zz=z, xr=xr, yr=yr, zr=zr
 	void    = EXECUTE(tmp)
 
 	RETURN, {ind:ind, n:nn}
+END
+
+;;----- Smoothing related
+FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
+	yy 	= yy2
+	nn 	= N_ELEMENTS(yy)
+
+	CASE dir OF
+		'F': BEGIN
+			ind0 	= 0L
+			ind1 	= nn-1L
+			dn 		= 1L
+			END
+		'B': BEGIN
+			ind0 	= nn-1L
+			ind1 	= 0L
+			dn 		= -1L
+			END
+		'N': BEGIN
+			ind0 	= 0L
+			ind1 	= nn-1L
+			dn 	 	= 1L
+			END
+		ELSE: BEGIN
+			self->errorout, 'wrong direction for mafit: check MA_direction'
+			STOP
+			END
+	ENDCASE
+
+    FOR i=ind0, ind1, dn DO BEGIN
+    	i0 	= (i - LONG(nstep)/2) > 0L
+		i1 	= (i + LONG(nstep)/2) < (nn-1L)
+
+		IF i0 EQ 0L THEN i1 = (i + i - i0) < (nn-1L)
+		IF i1 EQ nn-1L THEN i0 = (i - (i1-i)) > 0L
+
+		IF dir EQ 'F' OR dir EQ 'B' THEN dummy 	= yy(i0:i1) ELSE dummy = yy2(i0:i1)
+		
+
+
+		IF ~KEYWORD_SET(sigma) THEN BEGIN
+			yy(i) 	= MEAN(dummy)
+		ENDIF ELSE BEGIN
+			avg 	= MEAN(dummy)
+			std 	= STDDEV(dummy)
+			cut 	= WHERE( ABS(dummy - avg) LT std*n_sigma)
+			yy(i) 	= MEAN( dummy(cut) )
+		ENDELSE
+	ENDFOR
+
+	RETURN, yy
+END
+
+FUNCTION veluga::g_smooth, xx, yy, type=type, $
+	MA_step=MA_step, MA_direction=MA_direction, MA_nsigma=MA_nsigma
+	;;-----
+	;; Line smoothing with different algorithm
+	;;	xx, yy: [N] float/double
+	;;
+	;;  type: [1] string
+	;;		'MA': moving average. MA_step & MA_direction should be argued
+	;;
+	;;
+	;;	MA_step: [1] integer
+	;;		filter width for computing average
+	;;
+	;;	MA_direction: [1] string
+	;;		direction of filter
+	;;		'F' or 'B' as forward or backward
+	;;		'N' by no movements
+	;;
+	;;	MA_nsigma: [1] float/double
+	;;		sigma-clipping for computing average
+	;;		e.g., MA_nsigma=3 means that an average is computed with points within 3 sigma
+	;;	
+	;;
+	;;-----
+
+	IF ~KEYWORD_SET(type) THEN type = 'MA'
+	type 	= STRUPCASE(type)
+
+	CASE type OF
+		'MA': BEGIN
+			IF ~KEYWORD_SET(MA_step) THEN MA_step = 5L
+			IF ~KEYWORD_SET(MA_direction) THEN MA_direction = 'F'
+			IF ~KEYWORD_SET(MA_nsigma) THEN MA_nsigma = -1.d
+			MA_direction 	= STRUPCASE(MA_direction)
+			RETURN, self->g_smooth_mafit(xx, yy, MA_step, MA_direction, MA_nsigma)
+			END
+	ENDCASE
+
 END
 ;;-----
 ;; SIMPLE GET FTNS
@@ -1074,8 +1174,8 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	cell.zp 	= mesh_hd(*,5)
 	cell.mp 	= mesh_mp
 
-	cell.UE 	= mesh_hd(*,4)/(5.d/3.-1.d) * info.unit_T2 / (1.66d-24) * 1.38049d-23 * 1e-3 ;; [km/s]^2
-	cell.p_thermal = mesh_hd(*,4)*mesh_hd(*,0) * info.unit_m / info.unit_l / info.unit_t^2 / 1.3806200d-16
+	cell.UE 	= (mesh_hd(*,4)/toKmu)/(5.d/3.-1.d) * info.unit_T2 / (info.cgs.mH) * (info.cgs.kB*1d-7) * 1e-3 ;; [km/s]^2
+	cell.p_thermal = (mesh_hd(*,4)/toKmu)*(mesh_hd(*,0)/tocc) * info.unit_m / info.unit_l / info.unit_t^2 / info.cgs.kB
 
 	cell.levelind 	= [levelind(0,*), levelind]
 
@@ -1166,8 +1266,8 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	part 	= self->g_part(snap0, 0.d, 0.d, 0.d, 0.d, dom_list=dom_all)
 
 	dm_ind 	= WHERE(part.family EQ 1L, nn_dm)
-	part 	= part(dm_ind)
-	xp 	= DBLARR(N_ELEMENTS(part),3)
+	part 	= self->g_extract(part, dm_ind)
+	xp 	= DBLARR(nn_dm,3)
 	xp(*,0)	= part.xx
 	xp(*,1)	= part.yy
 	xp(*,2)	= part.zz
@@ -1445,12 +1545,13 @@ FUNCTION veluga::g_sbf, lum, size, band
 	RETURN, sbf
 END
 
-PRO veluga::g_potential, cell, part, $
+FUNCTION veluga::g_potential, xx, yy, zz, mm, $
 	p_type=p_type, e_type=e_type, bsize=bsize
 
 	;;-----
 	;; Compute potential using all mass components
 	;;
+	;;		PE in [(km/s)^2]
 	;;-----
 
 	settings 	= self->getheader()
@@ -1471,31 +1572,18 @@ PRO veluga::g_potential, cell, part, $
 	;;-----
 	;; ALLOCATE
 	;;-----
+	npart 	= N_ELEMENTS(xx)
+	pos 	= DBLARR(npart,3)
+	mass 	= DOUBLE(mm)
 
-	npart 	= N_ELEMENTS(part)
-	ncell 	= N_ELEMENTS(cell)
+	pos(*,0) 	= xx
+	pos(*,1) 	= yy
+	pos(*,2) 	= zz
 
-	pos 	= DBLARR(npart+ncell,3)
-	mass 	= DBLARR(npart+ncell)
-
-	pos(0L:npart-1L,0) 	= part.xx
-	pos(0L:npart-1L,1) 	= part.yy
-	pos(0L:npart-1L,2) 	= part.zz
-	mass(0L:npart-1L) 	= part.mp
-
-	cut_part	= WHERE(part.family NE 1L AND part.family NE 2L, ntracer)
-	IF ntracer GE 1L THEN mass(cut_part) = 0.d
-
-	pos(npart:npart+ncell-1L,0) 	= cell.xx
-	pos(npart:npart+ncell-1L,1) 	= cell.yy
-	pos(npart:npart+ncell-1L,2) 	= cell.zz
-	mass(npart:npart+ncell-1L)	 	= cell.mp
-
-	pot 	= DBLARR(npart+ncell)
-	force 	= DBLARR(npart+ncell)
+	pot 	= DBLARR(npart)
+	force 	= DBLARR(npart)
 	IF N_ELEMENTS(mass) LE bsize THEN bsize = 4L
 
-	STOP
 	;;-----
 	;; Compute potential
 	;;-----
@@ -1522,11 +1610,11 @@ PRO veluga::g_potential, cell, part, $
 	void 	= CALL_EXTERNAL(ftr_name, 'js_getpt_ft', $
 		larr, darr, pos, mass, pot, force)
 
-	part.PE 	= pot(0L:npart-1L) 		;; [km/s]^2
-	cell.PE 	= pot(npart:npart+ncell-1L)
+	;part.PE 	= pot(0L:npart-1L) 		;; [km/s]^2
+	;cell.PE 	= pot(npart:npart+ncell-1L)
 
 	;part(cut_part).KE 	= self->g_d3d( part(cut_part).vx, part(cut_part).vy, part(cut_part).vz, []
-	RETURN
+	RETURN, {PE:pot, force:force}
 END
 
 FUNCTION veluga::g_extract, array, ind
@@ -1581,6 +1669,386 @@ FUNCTION veluga::g_extract, array, ind
 
 	RETURN, array2
 
+END
+
+FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_list=dom_list, n_shell=n_shell, bsize=bsize
+
+	;;-----
+	;; Get Cell type (ISM, CGM, IGM) around the given center
+	;; 		Cell is classified based on Rhee+24
+	;; 		PE & KE are measured and stored in the cell array
+	;;		Particles (< rc) are used to compute potential
+	;;		Cells outside the paerture are classified as IGM (and are not used for potential calculation)
+	;; 
+	;;
+	;; Result: [N] integer
+	;;		N is the number of cell
+	;;		1  ISM
+	;;		0  CGM
+	;; 		-1 IGM (or surrounding cell)
+	;;	
+	;;	n_snap: [1] integer
+	;;		snapshot number
+	;;
+	;;	cell: [] cell array
+	;;
+	;; 	xc, yc, zc, rr: [1] double
+	;;		center & radius in kpc unit
+	;;
+	;;	vxc, vyc, vzc: [1] double
+	;;		velocity of the center to get the relative velocities
+	;;
+	;;	dom_list: [N] integer
+	;;		domain_list
+	;;		If set, read all cells in the argued domain. If not, read all cells inside rr2 + dx
+	;;
+	;;	n_shell: [1] integer
+	;;		# of radial bins when computing metallicity radial distribution of ISM to distinguish IGM / CGM
+	;;
+	;;	bsize: [1] integer
+	;;		Leaf node size of KDTree when computing potential
+	;;-----
+
+	IF ~KEYWORD_SET(dom_list) THEN BEGIN
+		dom_list 	= self->g_domain(n_snap, xc, yc, zc, rc*2.d)
+	ENDIF
+
+	IF ~KEYWORD_SET(n_shell) THEN n_shell = 100L
+	IF ~KEYWORD_SET(bsize) THEN bsize = 1024L
+
+	c_d3d 	= self->g_d3d(cell.xx, cell.yy, cell.zz, [xc, yc, zc])
+	c_outside 	= WHERE(c_d3d GT rc, nc_outside)
+
+	;;----- Read Part	
+	part 	= self->g_part(n_snap, 0.d, 0.d, 0.d, 0.d, dom_list=dom_list)
+
+	;;----- Get Part within the aperture
+	p_d3d 	= self->g_d3d(part.xx, part.yy, part.zz, [xc, yc, zc])
+	p_ind	= WHERE( (part.family EQ 1L OR part.family EQ 2L) AND p_d3d LT rc , np)
+	IF np EQ 0L THEN STOP
+	part 	= self->g_extract(part, p_ind)
+
+
+	
+	;;-----
+	;; Get Potential
+	;;-----
+	nc 	= cell.n
+	nn 	= np + nc
+	dumx 	= DBLARR(nn)
+	dumy 	= DBLARR(nn)
+	dumz 	= DBLARR(nn)
+	dumm 	= DBLARR(nn)
+
+	dumx(0L:nc-1L)	 	= cell.xx
+	dumx(nc:np+nc-1L)	= part.xx
+
+	dumy(0L:nc-1L)	 	= cell.yy
+	dumy(nc:np+nc-1L)	= part.yy
+
+	dumz(0L:nc-1L)	 	= cell.zz
+	dumz(nc:np+nc-1L)	= part.zz
+
+	dumm(0L:nc-1L)	 	= cell.mp
+	IF nc_outside GE 1L THEN dumm(c_outside) = 0.d
+
+	dumm(nc:np+nc-1L)	= part.mp
+
+	pot 	= self->g_potential(dumx, dumy, dumz, dumm, bsize=bsize)
+	
+	cell.PE 	= pot.PE(0L:nc-1L)
+	;IF nc_outside GE 1L THEN cell.PE(c_outside) = 0.d
+
+	cell.KE 	= 0.5d * (self->g_d3d(cell.vx, cell.vy, cell.vz, [vxc, vyc, vzc]))^2
+
+	Etot 	= cell.PE + cell.KE + cell.UE
+	
+	;;-----
+	;; Cell type with metallicity condition
+	;;	1 : ISM
+	;;	0 : CGM
+	;;	-1: IGM
+	;;-----
+	cell_type 	= LONARR(N_ELEMENTS(Etot)) - 1L
+
+	Ecut 	= 0.d 		;; Energy cut for boundness
+	d_shell	= rc/n_shell
+	minZval	= 0.1*0.02 	;; Lower bound Metallicity for CGM (0.1 Zsun)
+	tempcut	= 1e7
+
+	;; ISM by Bound cells
+	cut 	= WHERE(Etot LT Ecut, ncut)
+	IF ncut GE 1L THEN cell_type(cut) = 1L
+
+	;; Compute radial metallicity distribution of ISM
+	ism_met	= DBLARR(n_shell,2)
+		ism_met(*,0)	= 1e8
+		ism_met(*,1)	= 0.
+
+
+	FOR i=0L, n_shell-1L DO BEGIN
+		r0 	= d_shell * i
+		r1 	= d_shell * (i+1.d)
+		
+		cut = WHERE(c_d3d GE r0 and c_d3d LT r1 AND cell_type EQ 1L, ncut)
+		IF ncut EQ 0L THEN CONTINUE
+
+		ism_met(i,0)	= self->g_wmean(cell.zp(cut), cell.mp(cut))
+		ism_met(i,1) 	= self->g_wstddev(cell.zp(cut), cell.mp(cut))
+	ENDFOR
+
+	;; Extrapolate ism_met beyond the ISM boundary
+	;;	, to keep high metallicity
+	FOR i=1L, n_shell-1L DO BEGIN
+		IF ism_met(i,0) GE 1e7 THEN BEGIN
+			ism_met(i,*)	= ism_met(i-1,*)
+		ENDIF
+	ENDFOR
+
+	;; CGM by 1) Positive E & 2) Z > MAX(Z_ism - dz_ism, minZval) 3) Outflowing or T > 1e7K
+	vdot 	= (cell.xx - xc) * (cell.vx - vxc) + (cell.yy - yc) * (cell.vy - vyc) + (cell.zz - zc) * (cell.vz - vzc)
+	vdot0	= MAX(ABS(vdot)) * (-2.d)
+
+	FOR i=0L, n_shell-1L DO BEGIN
+		r0 	= d_shell*i
+		r1 	= d_shell*(i+1.d)
+
+		cut = WHERE(c_d3d GE r0 AND c_d3d LT r1 AND cell_type NE 1L, ncut) ;; here 1) is already satisfied
+		IF ncut EQ 0L THEN CONTINUE
+
+
+		met_avg	= self->g_wmean(cell.zp(cut), cell.mp(cut))
+		met_std = self->g_wstddev(cell.zp(cut), cell.mp(cut))
+
+		lowZval 	= MAX([minZval, ism_met(i,0) - ism_met(i,1)])
+
+
+		cut2 	= WHERE($
+			(c_d3d GE r0 AND c_d3d LT r1) AND $
+			cell_type NE 1L AND $ 		;; Condition 1)
+			cell.zp GT lowZval AND $	;; Condition 2)
+			(vdot GT 0. OR cell.temp GT tempcut) $ ;; Condition 3)
+			, nc2)
+
+		IF nc2 GE 1L THEN cell_type(cut2) = 0L
+	ENDFOR
+
+	;; IGM for left cells
+	cell_type(c_outside) 	= -1L
+	
+	RETURN, cell_type
+END
+
+FUNCTION veluga::g_cellphase, n_snap, cell
+
+	;;-----
+	;; Get Cell phase based on cold (warm) vs. hot based on the criterion by Torrey+12
+	;;
+	;; Result: [N] integer
+	;;		N is the number of cell
+	;;		2  SF (nH > 10 cc)
+	;;		1  cold
+	;;		-1 hot
+	;;	
+	;;	n_snap: [1] integer
+	;;		snapshot number
+	;;
+	;;	cell: [] cell array
+	;;
+	;;		density and temperature should be given in K and cc unit, respectively, which is the default output of g_cell
+	;;-----
+
+	info 	= self->g_info(n_snap)
+
+	den2    = ALOG10(cell.den) + ALOG10(1.6600000d-24)   ;; g/cc
+        den2    -= ALOG10(info.cgs.m_sun)   ;; Msun/cc
+        den2    += 3.*ALOG10(info.cgs.kpc)  ;; Msun/Kpc^3
+        den2    -= 2.*ALOG10(info.H0/100.)     ;; Msun h^2 / Kpc^3
+        den2    -= ALOG10(1e10)         ;; 1e10Msun h^2 / Kpc^3
+        den2    = 10.d^den2
+
+    phase	= LONARR(cell.n) - 1L
+    cut_cold= WHERE(ALOG10(cell.temp) LT 6. + 0.25 * ALOG10(den2), nc)
+    IF nc GE 1L THEN phase(cut_cold) = 1L
+
+    cut_sf 	= WHERE(cell.den GT 10., nsf)
+    IF nsf GE 1L THEN phase(cut_sf) = 2L
+
+    RETURN, phase
+END
+
+FUNCTION veluga::g_vovers, xx, yy, zz, vx, vy, vz, mm
+	;;-----
+	;; Compute V_tan/sigma_1D for given 6D coordinates (relative to their center)
+	;;
+	;;-----
+
+	;;-----
+	;; Find Rotational Axis
+	;;-----
+	Lx0	= TOTAL(yy*vz*mm - zz*vy*mm) / TOTAL(mm)
+	Ly0	= TOTAL(zz*vx*mm - xx*vz*mm) / TOTAL(mm)
+	Lz0	= TOTAL(xx*vy*mm - yy*vx*mm) / TOTAL(mm)
+
+	rvec	= [Lx0, Ly0, Lz0]
+	rvec_z	= rvec / NORM(rvec)
+
+		const	= SQRT( (1. - rvec_z(0)^2 - rvec_z(1)^2) / (1. - rvec_z(1)^2) )
+	rvec_x	= [const, 0., SQRT(1. - const^2)]
+	rvec_y 	= CROSSP(rvec_z, rvec_x)
+
+	;;-----
+	;; Rotate the rotational axes
+	;;-----
+	xx0	= xx * rvec_x(0) + yy * rvec_x(1) + zz * rvec_x(2)
+	yy0	= xx * rvec_y(0) + yy * rvec_y(1) + zz * rvec_y(2)
+	zz0	= xx * rvec_z(0) + yy * rvec_z(1) + zz * rvec_z(2)
+
+	vx0	= vx * rvec_x(0) + vy * rvec_x(1) + vz * rvec_x(2)
+	vy0	= vx * rvec_y(0) + vy * rvec_y(1) + vz * rvec_y(2)
+	vz0	= vx * rvec_z(0) + vy * rvec_z(1) + vz * rvec_z(2)
+
+	;;-----
+	;; Cartesian to Cylinderical
+	;;-----
+	vz 	= vz0
+		norm1	= SQRT(xx0^2 + yy0^2)
+		ang1	= xx0 / norm1
+		ang2	= yy0 / norm1
+
+	vr 	= vx0*ang1 + vy0*ang2
+	vt 	= vx0*(-ang2) + vy0*ang1
+
+	;m_vt	= MEAN(vt)
+	;s_vr	= STDDEV(vr)
+	;s_vt	= STDDEV(vt)
+	;s_vz	= STDDEV(vz)
+	
+
+	m_vt	= self->g_WMEAN(vt, mm)
+	s_vr	= self->g_WSTDDEV(vr, mm)
+	s_vt	= self->g_WSTDDEV(vt, mm)
+	s_vz	= self->g_WSTDDEV(vz, mm)
+	RETURN, m_vt / SQRT( (s_vr^2 + s_vt^2 + s_vz^2) / 3. )
+END
+
+;;-----
+
+FUNCTION veluga::g_tracertag_get3bits, n
+	n 	= (n OR ISHFT(n, 16)) AND 0x030000FF
+	n 	= (n OR ISHFT(n, 8 )) AND 0x0300F00F
+	n 	= (n OR ISHFT(n, 4 )) AND 0x030C30C3
+	n 	= (n OR ISHFT(n, 2 )) AND 0X09249249
+	RETURN, n
+END
+
+FUNCTION veluga::g_tracertag_getmorton, x, y, z
+	x_bits 	= self->g_tracertag_get3bits(x)
+	y_bits 	= self->g_tracertag_get3bits(y)
+	z_bits 	= self->g_tracertag_get3bits(z)
+
+	RETURN, x_bits OR ISHFT(y_bits,1) OR ISHFT(z_bits,2)
+END
+
+PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
+	;;-----
+	;; Give cell properties (velocity, mass and celltype if given) to tagged tracer ptcls
+	;; It is recommanded for (tracer ptcls) to have smaller range compared to cell
+	;;
+	;; mass, velocity are stored in ptcl array with 'mp' and 'vx, vy, vz' tag
+	;; celltype is stored in 'family' tag
+	;;-----
+
+	IF ~KEYWORD_SET(celltype) THEN celltype = LONARR(cell.n) + 1L
+
+	;; Bound check
+	void 	= WHERE(ptcl.xx LT MIN(cell.xx) OR ptcl.xx GT MAX(cell.xx), nx)
+	void 	= WHERE(ptcl.yy LT MIN(cell.yy) OR ptcl.yy GT MAX(cell.yy), ny)
+	void 	= WHERE(ptcl.zz LT MIN(cell.zz) OR ptcl.zz GT MAX(cell.zz), nz)
+	IF nx + ny + nz GE 1L THEN BEGIN
+		self->errorout, 'there are tracer ptcls out of the box'
+	ENDIF
+
+
+
+	;;----- Get Initial Hash table
+	mindx 		= MIN(cell.dx)
+	cell_nx 	= LONG64((cell.xx + 0.1*mindx) / mindx)
+	cell_ny 	= LONG64((cell.yy + 0.1*mindx) / mindx)
+	cell_nz 	= LONG64((cell.zz + 0.1*mindx) / mindx)
+
+	cell_key 	= self->g_tracertag_getmorton(cell_nx, cell_ny, cell_nz)
+
+	cell_tbl 	= LONARR(MAX(cell_key))
+	cell_tbl(cell_key) 	= LINDGEN(N_ELEMENTS(cell_key))
+
+	;;----- Get Tracer Keys
+	ptcl_nx 	= LONG64((ptcl.xx + 0.1*mindx) / mindx)
+	ptcl_ny 	= LONG64((ptcl.yy + 0.1*mindx) / mindx)
+	ptcl_nz 	= LONG64((ptcl.zz + 0.1*mindx) / mindx)
+
+	
+	ptcl_key 	= self->g_tracertag_getmorton(ptcl_nx, ptcl_ny, ptcl_nz)
+	ptcl_ind 	= cell_tbl(ptcl_key)
+
+
+	;;----- Get # of tracer ptcls in each cell
+	ptcl_nn 	= LONARR(MAX(ptcl_ind)+1L)		;; use collections in python
+	ptcl_nn(ptcl_ind)	++
+	
+	;;----- Give Properties to tracer
+	ptcl.vx 	= cell.vx(ptcl_ind)
+	ptcl.vy 	= cell.vy(ptcl_ind)
+	ptcl.vz 	= cell.vz(ptcl_ind)
+
+	ptcl.family = celltype(ptcl_ind)	;; family is replaced with celltype
+	ptcl.mp		= cell.mp(ptcl_ind) / ptcl_nn(ptcl_ind)
+
+	RETURN
+END
+
+FUNCTION veluga::g_indmatch, x2, y2
+	;;-----
+	;; Give the matched element of each array
+	;;
+	;; Reulst: Structure of matched indices
+	;;
+	;; ex) x(i) = y(result.x(i))
+	;;	   y(i) = x(result.y(i))
+	;;	
+	;; x 	: [N] integer
+	;; y 	: [M] integer 
+	;;-----
+
+	x 	= LONG64(x2)
+	y 	= LONG64(y2)
+
+	;;----- AVOID NEGATIVE
+	minval 	= MIN([MIN(x), MIN(y)])
+	IF minval LT 0L THEN BEGIN
+		x -= minval
+		y -= minval
+	ENDIF
+
+	settings 	= self->getheader()
+	ftr_name 	= settings.dir_lib + '/src/fortran/js_indmatch.so'
+	larr = LONARR(20) & darr = DBLARR(20)
+	larr(0)	= self.num_thread
+	larr(1)	= N_ELEMENTS(x)
+	larr(2)	= N_ELEMENTS(y)
+
+	larr(10)	= 1L
+			;; search type
+			;; 1 - hash
+			;; 2 - binary search (not implemented)
+
+	x_match 	= x*0LL - 1LL
+	y_match 	= y*0LL - 1LL
+
+	void 	= CALL_EXTERNAL(ftr_name, 'js_indmatch', $
+		larr, darr, x, y, x_match, y_match)
+
+	RETURN, {x:x_match, y:y_match}
 END
 ;;-----
 ;; DRAWING ROUTINES
@@ -1900,12 +2368,14 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;;-----
 	;; ALLOCATE
 	;;-----
-	temp 	= DBLARR(cell.n, 1L + N_ELEMENTS(amrvar))
+	temp 	= DBLARR(cell.n, N_ELEMENTS(amrvar), 2)
+
+	;; nCell X nAMR X [weight, map] 
 	;temp 	= DBLARR(cell.N, 2)
 		;; 0 as variable
 		;; 1 as density (for MW)
 
-	temp(*,0) 	= cell.den
+	;temp(*,0) 	= cell.den
 
 	;; Sun chemistry (Asplund 09)
 	sun_N_o_H	= 10.d^(7.83d - 12.d) ;; [#_N / #_H]
@@ -1917,78 +2387,83 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	sun_Fe_o_H	= 10.d^(7.50d - 12.d)
 
 	FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
-	CASE amrvar(i) OF
-		'D' : temp(*,i+1L) = cell.den
-		'T' : temp(*,i+1L) = cell.temp
-		'PT': temp(*,i+1L) = cell.P_thermal
-		'PR': temp(*,i+1L) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
-		'Z' : temp(*,i+1L) = cell.zp
-		'O/FE' 	: BEGIN
-			N_X 	= cell.chem_O / 15.999d
-			N_H 	= cell.chem_H
-			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_O_o_H) - ALOG10(sun_Fe_o_H))
-			END
-		'MG/FE' 	: BEGIN
-			N_X 	= cell.chem_Mg / 24.305d
-			N_H 	= cell.chem_H
-			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Mg_o_H) - ALOG10(sun_Fe_o_H))
-			END
-		'SI/FE' 	: BEGIN
-			N_X 	= cell.chem_Si / 28.0855d
-			N_H 	= cell.chem_H
-			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
-			END
-		'ALPHA/FE'	: BEGIN
-			N_X 	= cell.chem_Si / 28.0855d + cell.chem_O / 15.999d + cell.chem_Mg / 24.305d
-			N_H 	= cell.chem_H
-			N_Fe 	= cell.chem_Fe / 55.845d * 3.d
-			sOh 	= (sun_Mg_o_H + sun_Si_o_H + sun_O_o_H)
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sOh) - ALOG10(sun_Fe_o_H*3.d))
-			END
-		'S/FE' 	: BEGIN
-			N_X 	= cell.chem_S / 32.065d
-			N_H 	= cell.chem_H
-			N_Fe 	= cell.chem_Fe / 55.845d
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_S_o_H) - ALOG10(sun_Fe_o_H))
-			END
-		'C/H' 	: BEGIN
-			N_X 	= cell.chem_C / 12.011d
-			N_H 	= cell.chem_H
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(sun_C_o_H)
-			END
-		'N/H' 	: BEGIN
-			N_X 	= cell.chem_N / 14.0067d
-			N_H 	= cell.chem_H
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
-			END
-		'LIGHT/H' 	: BEGIN
-			N_X 	= cell.chem_N / 14.0067d + cell.chem_C / 12.011d
-			N_H 	= cell.chem_H * 2.d
-			soH 	= sun_N_o_H + sun_C_o_H
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(soh/2.)
-			END
-		'FE/H' 	: BEGIN
-			N_X 	= cell.chem_Fe / 55.845d
-			N_H 	= cell.chem_H
-			temp(*,i+1L) 	= ALOG10(N_X / N_H) - ALOG10(sun_Fe_o_H)
-			END
-		'O'		: temp(*,i+1L)	= cell.chem_O * cell.mp / 15.999d
-		'SI'	: temp(*,i+1L)	= cell.chem_Si * cell.mp / 28.0855d
-		'MG'	: temp(*,i+1L)	= cell.chem_Mg * cell.mp / 24.305d
-		'FE'	: temp(*,i+1L)	= cell.chem_Fe * cell.mp / 55.845d
+		CASE amrvar(i) OF
+			'D' : temp(*,i,0) = cell.den
+			'T' : temp(*,i,0) = cell.temp
+			'PT': temp(*,i,0) = cell.P_thermal
+			'PR': temp(*,i,0) = cell.den * (self->g_d3d(cell.vx, cell.vy, cell.vz, vv0))^2
+			'Z' : temp(*,i,0) = cell.zp
+			'O/FE' 	: BEGIN
+				N_X 	= cell.chem_O / 15.999d
+				N_H 	= cell.chem_H
+				N_Fe 	= cell.chem_Fe / 55.845d
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_O_o_H) - ALOG10(sun_Fe_o_H))
+				END
+			'MG/FE' 	: BEGIN
+				N_X 	= cell.chem_Mg / 24.305d
+				N_H 	= cell.chem_H
+				N_Fe 	= cell.chem_Fe / 55.845d
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Mg_o_H) - ALOG10(sun_Fe_o_H))
+				END
+			'SI/FE' 	: BEGIN
+				N_X 	= cell.chem_Si / 28.0855d
+				N_H 	= cell.chem_H
+				N_Fe 	= cell.chem_Fe / 55.845d
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_Si_o_H) - ALOG10(sun_Fe_o_H))
+				END
+			'ALPHA/FE'	: BEGIN
+				N_X 	= cell.chem_Si / 28.0855d + cell.chem_O / 15.999d + cell.chem_Mg / 24.305d
+				N_H 	= cell.chem_H
+				N_Fe 	= cell.chem_Fe / 55.845d * 3.d
+				sOh 	= (sun_Mg_o_H + sun_Si_o_H + sun_O_o_H)
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sOh) - ALOG10(sun_Fe_o_H*3.d))
+				END
+			'S/FE' 	: BEGIN
+				N_X 	= cell.chem_S / 32.065d
+				N_H 	= cell.chem_H
+				N_Fe 	= cell.chem_Fe / 55.845d
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(N_Fe / N_H) - (ALOG10(sun_S_o_H) - ALOG10(sun_Fe_o_H))
+				END
+			'C/H' 	: BEGIN
+				N_X 	= cell.chem_C / 12.011d
+				N_H 	= cell.chem_H
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_C_o_H)
+				END
+			'N/H' 	: BEGIN
+				N_X 	= cell.chem_N / 14.0067d
+				N_H 	= cell.chem_H
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_N_o_H)
+				END
+			'LIGHT/H' 	: BEGIN
+				N_X 	= cell.chem_N / 14.0067d + cell.chem_C / 12.011d
+				N_H 	= cell.chem_H * 2.d
+				soH 	= sun_N_o_H + sun_C_o_H
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(soh/2.)
+				END
+			'FE/H' 	: BEGIN
+				N_X 	= cell.chem_Fe / 55.845d
+				N_H 	= cell.chem_H
+				temp(*,i,0) 	= ALOG10(N_X / N_H) - ALOG10(sun_Fe_o_H)
+				END
+			'O'		: temp(*,i,0)	= cell.chem_O * cell.mp / 15.999d
+			'SI'	: temp(*,i,0)	= cell.chem_Si * cell.mp / 28.0855d
+			'MG'	: temp(*,i,0)	= cell.chem_Mg * cell.mp / 24.305d
+			'FE'	: temp(*,i,0)	= cell.chem_Fe * cell.mp / 55.845d
+	
+			'DUST1' : temp(*,i,0)	= cell.mp * cell.dust_1
+			'DUST2' : temp(*,i,0)	= cell.mp * cell.dust_2
+			'DUST3' : temp(*,i,0)	= cell.mp * cell.dust_3
+			'DUST4' : temp(*,i,0)	= cell.mp * cell.dust_4
+			'DUST' 	: temp(*,i,0)	= cell.mp * (cell.dust_1 + cell.dust_2 + cell.dust_3 + cell.dust_4)
+		ENDCASE
 
-		'DUST1' : temp(*,i+1L)	= cell.mp * cell.dust_1
-		'DUST2' : temp(*,i+1L)	= cell.mp * cell.dust_2
-		'DUST3' : temp(*,i+1L)	= cell.mp * cell.dust_3
-		'DUST4' : temp(*,i+1L)	= cell.mp * cell.dust_4
-		'DUST' 	: temp(*,i+1L)	= cell.mp * (cell.dust_1 + cell.dust_2 + cell.dust_3 + cell.dust_4)
-	ENDCASE
+		CASE amrtype(i) OF
+			'MW'	: temp(*,i,1) 	= cell.den 	;; converted to mass
+			ELSE 	: temp(*,i,1) 	= cell.den 		;; actually not used
+		ENDCASE
 	ENDFOR
 
-	map 	= DBLARR(n_pix, n_pix, 1L+N_ELEMENTS(amrvar))
+	map 	= DBLARR(n_pix, n_pix, N_ELEMENTS(amrvar), 2)
 
 	;;-----
 	;; Compute
@@ -2005,7 +2480,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 		yy 	= cell.yy(ind0:ind1)
 		zz 	= cell.zz(ind0:ind1)
 		level= cell.level(ind0:ind1)
-		tempdum		= temp(ind0:ind1,*)
+		tempdum		= temp(ind0:ind1,*,*)
 		dx 	= cell.dx(ind0)
 
 		check 	= ABS(level - lev)
@@ -2015,7 +2490,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 			xx 	= cell.xx(cut)
 			yy 	= cell.yy(cut)
 			zz 	= cell.zz(cut)
-			tempdum	= temp(cut,*)
+			tempdum	= temp(cut,*,*)
 			dx 	= cell.dx(cut(0))
 			integrity	+= nlev
 			print, 'here?'
@@ -2035,7 +2510,7 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 			xx 	= xx(cut)
 			yy 	= yy(cut)
 			zz 	= zz(cut)
-			tempdum	= tempdum(cut,*)
+			tempdum	= tempdum(cut,*,*)
 		ENDIF
 
 		;IF nlev EQ 0L THEN CONTINUE
@@ -2079,9 +2554,9 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 	ENDFOR
 
-	IF integrity NE N_ELEMENTS(temp(*,0)) THEN BEGIN
+	IF integrity NE N_ELEMENTS(temp(*,0,0)) THEN BEGIN
 		self->errorout, 'levelind integrity is broken'
-		self->errorout, 'N_cell = ', STRTRIM(N_ELEMENTS(temp(*,0)),2)
+		self->errorout, 'N_cell = ', STRTRIM(N_ELEMENTS(temp(*,0,0)),2)
 		self->errorout, 'N_lev  = ', STRTRIM(integrity,2)
 		STOP
 	ENDIF
@@ -2091,37 +2566,42 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 
 	;;----- output
 	;dummymap	= DBLARR(n_pix, n_pix)
-	result 	= REPLICATE({amrvar:'', amrtype:'', map:DBLARR(n_pix,n_pix)}, N_ELEMENTS(amrvar)+1L)
-
-	result(0).amrvar = 'M0'
-	result(0).map 	= REFORM(map(*,*,0), n_pix, n_pix)
+	result 	= REPLICATE({amrvar:'', amrtype:'', map:DBLARR(n_pix,n_pix), map0:DBLARR(n_pix,n_pix)}, N_ELEMENTS(amrvar))
 
 	FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
-		result(i+1L).amrvar = amrvar(i)
-		result(i+1L).amrtype= amrtype(i)
-		result(i+1L).map 	= REFORM(map(*,*,i+1L),n_pix, n_pix)
+		result(i).amrvar = amrvar(i)
+		result(i).amrtype= amrtype(i)
+		result(i).map 	= REFORM(map(*,*,i,0),n_pix, n_pix)
+		result(i).map0 	= REFORM(map(*,*,i,1),n_pix, n_pix)
 	ENDFOR
 	
 	IF KEYWORD_SET(memeff) THEN RETURN, result
 
-	cut 	= WHERE(result(0).map GT 0., ncut)
-	IF ncut GE 1L THEN BEGIN
-		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
-			CASE amrtype(i) OF
-				'MW': result(i+1L).map(cut) /= result(0).map(cut)
-			ENDCASE
-		ENDFOR
-	ENDIF
+	FOR i=0L, N_ELEMENTS(amrtype)-1L DO BEGIN
+		cut 	= WHERE(result(i).map0 GT 0., ncut)
+		IF ncut EQ 0L THEN CONTINUE
 
-	cut 	= WHERE(result.m0 EQ 0., ncut)
-	IF ncut GE 1L THEN BEGIN
-		FOR i=0L, N_ELEMENTS(amrvar)-1L DO BEGIN
-			CASE amrtype(i) OF
-				'MW': result(i+1L).map(cut) = 0.d
-			ENDCASE
-		ENDFOR
-	ENDIF
+		CASE amrtype(i) OF
+			'MW': result(i).map(cut) /= result(i).map0(cut)
+			'VW': result(i).map(cut) /= result(i).map0(cut)
+			'MAX':
+			'CD':
+			'HIST':
+		ENDCASE
+	ENDFOR
 
+	FOR i=0L, N_ELEMENTS(amrtype)-1L DO BEGIN
+		cut 	= WHERE(result(i).map0 EQ 0., ncut)
+		IF ncut EQ 0L THEN CONTINUE
+
+		CASE amrtype(i) OF
+			'MW': result(i).map(cut) = 0.d
+			'VW': result(i).map(cut) = 0.d
+			'MAX':
+			'CD':
+			'HIST':
+		ENDCASE
+	ENDFOR
 
 	RETURN, result
 END

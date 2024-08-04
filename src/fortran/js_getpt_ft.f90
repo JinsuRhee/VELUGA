@@ -265,6 +265,7 @@
             ENDDO
           ENDDO
 
+
           ! Direct term
           bs      = lf(i)%bstart
           be      = lf(i)%bend
@@ -272,7 +273,6 @@
           DO j=bs, be
             dummy  = js_getpt_ft_interpole(bnd, pos(j,1:3), dummy_v)
             pot(j) = pot(j) + dummy
-
 
             dummy  = js_getpt_ft_interpole(bnd, pos(j,1:3), dummy_vf)
             force(j) = force(j) + dummy
