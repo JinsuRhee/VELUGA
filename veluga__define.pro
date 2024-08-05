@@ -125,6 +125,25 @@ FUNCTION veluga::r_gal_getdata, fid, str
 	H5D_CLOSE, did
 	RETURN, dumarr
 END
+
+;+
+; Parameters
+; ----------
+; n_snap : int
+;	Snapshot number
+;
+; id : int
+;	Object ID (a negative value calls all objects)
+;
+; horg: 'h' or 'g'
+;	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+;	Default is 'g'
+;
+;
+; Returns
+; -------
+; g = veluga->r_gal(100, 1)
+;+
 FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	;;-----
 	;;
