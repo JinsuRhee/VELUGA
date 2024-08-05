@@ -4,9 +4,9 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.8"
-    #  install:
-    #    - method: setuptools
-    #      path: .
+      install:
+        - method: setuptools
+          path: .
     #
   apt_packages:
     - gfortran
