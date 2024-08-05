@@ -10,8 +10,10 @@ Welcome to VELUGA's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   installation/index
    usage/index
-
+   catalogoutputs/index
+   
 
 Indices and tables
 ==================
