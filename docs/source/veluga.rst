@@ -12,13 +12,6 @@ veluga.veluga module
    :undoc-members:
    :show-inheritance:
 
-veluga.vrload module
---------------------
-
-.. automodule:: veluga.vrload
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 Module contents
 ---------------
