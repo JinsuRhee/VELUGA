@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 try:
     from numpy.distutils.core import Extension, setup
-except: ImportError:
+except ImportError:
     print("Numpy is not installed. Installing...")
     import subprocess
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'numpy'])
