@@ -1,6 +1,6 @@
 numpy==1.23.5
 pickle5==0.0.11
-#scipy==1.10.0
+scipy==1.10.0
 sphinx-rtd-theme==2.0.0
 sphinxcontrib-jquery==4.1
 h5py==3.7.0
