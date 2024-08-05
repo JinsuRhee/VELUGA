@@ -1,5 +1,14 @@
+import sys
 from setuptools import setup, find_packages
-from numpy.distutils.core import Extension, setup
+
+try:
+    from numpy.distutils.core import Extension, setup
+except: ImportError:
+    print("Numpy is not installed. Installing...")
+    import subprocess
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'numpy'])
+    from numpy.distutils.core import Extension, setup
+
 
 
 # Fortran extension
