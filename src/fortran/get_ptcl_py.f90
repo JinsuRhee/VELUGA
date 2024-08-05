@@ -245,8 +245,8 @@ CONTAINS
     
     IMPLICIT NONE
 
-    REAL(KIND=8), DIMENSION(:,:) :: p_dbl
-    INTEGER(KIND=8), DIMENSION(:,:) :: p_lnt
+    REAL(KIND=8), DIMENSION(:,:), INTENT(inout) :: p_dbl
+    INTEGER(KIND=8), DIMENSION(:,:), INTENT(inout) :: p_lnt
 
 
     INTEGER(KIND=4) nptcl, i, j, i0, i1
@@ -290,9 +290,11 @@ CONTAINS
 ! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
     RECURSIVE SUBROUTINE quicksort(a, nn, first, last)
     IMPLICIT NONE
-    INTEGER(KIND=8) a(nn,2), x, t, n
-    INTEGER(KIND=4) first, last
-    INTEGER(KIND=4) i, j, nn
+    INTEGER(KIND=8), INTENT(inout) :: a(nn,2), x, t, n
+    INTEGER(KIND=4), INTENT(inout) :: first, last
+    INTEGER(KIND=4), INTENT(in) :: nn
+    INTEGER(KIND=4) i, j
+
 
     x = a( (first+last) / 2, 1)
     i = first
@@ -325,14 +327,13 @@ CONTAINS
 !!-----
     SUBROUTINE get_ptcl_allocate(npart)
     IMPLICIT NONE
-    INTEGER(KIND=4) npart
+    INTEGER(KIND=4), INTENT(IN) :: npart
     IF(.NOT. ALLOCATED(p_dbl)) ALLOCATE(p_dbl(1:npart,1:9))
     IF(.NOT. ALLOCATED(p_lnt)) ALLOCATE(p_lnt(1:npart, 1:3))
     END SUBROUTINE
 
     SUBROUTINE get_ptcl_deallocate()
     IMPLICIT NONE
-    INTEGER(KIND=4) npart
     IF(ALLOCATED(p_dbl)) DEALLOCATE(p_dbl)
     IF(ALLOCATED(p_lnt)) DEALLOCATE(p_lnt)
     END SUBROUTINE
