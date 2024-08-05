@@ -623,6 +623,40 @@ class veluga:
 			q.put((start, end, self.galdata[start:end]))
 
 	def r_gal(self, n_snap, id0, mrange=None, horg='g'):
+		"""
+    	Load Galaxy/Halo Catalog Data.
+
+    	This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+    	
+    	Parameters
+    	----------
+    	n_snap : int
+        	Snapshot number
+    	id0 : int
+        	Object ID. Use a negative value to retrieve all objects in the snapshot.
+    	horg : {'g', 'h'}
+        	A flag to specify the object type. Use 'g' for galaxies and 'h' for halos.
+        	Default is 'g'.
+
+    	Returns
+    	-------
+    	structured_array
+        	A structured array containing information about the objects.
+        
+        Raises
+    	------
+    	ValueError
+        	If `n_snap` is not a valid snapshot number.
+        	If `horg` is not one of {'g', 'h'}.
+    
+	   	Examples
+    	--------
+    	>>> g = r_gal(100, -1, horg='g')
+    	>>> print(g['id'])
+    	>>> h = r_gal(200, 1, mrange=(1e10, 1e12), horg='h')
+    	>>> print(h['mass'])
+
+    	"""
 
 		# Path setting
 		if(horg=='h'): fname = self.header.dir_catalog + 'Halo/VR_Halo/snap_%0.4d'%n_snap + '.hdf5'
