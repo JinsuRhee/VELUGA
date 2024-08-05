@@ -10,9 +10,8 @@ Welcome to VELUGA's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   Introduction
-   Installation
-   Usage
+   usage/index
+
 
 Indices and tables
 ==================
