@@ -15,23 +15,19 @@ except ImportError:
 extensions = [
         Extension(
             name='src.fortran.get_ptcl_py', 
-            sources=['src/fortran/get_ptcl_py.f90'],
+            sources=['src/fortran/get_ptcl_py.f90', 'src/fortran/read_ramses_py.f90'],
         ),
         Extension(
             name='src.fortran.get_cell_py', 
-            sources=['src/fortran/get_cell_py.f90'],
+            sources=['src/fortran/get_cell_py.f90', 'src/fortran/read_ramses_py.f90'],
         ),
         Extension(
             name='src.fortran.get_amr_py', 
-            sources=['src/fortran/get_amr_py.f90'],
+            sources=['src/fortran/get_amr_py.f90', 'src/fortran/read_ramses_py.f90'],
         ),
         Extension(
             name='src.fortran.find_domain_py', 
             sources=['src/fortran/find_domain_py.f90'],
-        ),
-        Extension(
-            name='src.fortran.read_ramses_py', 
-            sources=['src/fortran/read_ramses_py.f90'],
         ),
 ]
 
