@@ -40,7 +40,12 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
-
+autodoc_mock_imports = [
+        'src.fortran.get_ptcl_py', 
+        'src.fortran.get_cell_py',
+        'src.fortran.get_amr_py', 
+        'src.fortran.find_domain_py',
+        ]
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
