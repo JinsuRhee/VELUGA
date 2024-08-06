@@ -651,10 +651,11 @@ class veluga:
 	
 		Examples
 		--------
-		>>> g = r_gal(100, -1, horg='g')
-		>>> print(g['id'])
-		>>> h = r_gal(200, 1, mrange=(1e10, 1e12), horg='h')
-		>>> print(h['mass'])
+		>>> g = veluga.r_gal(100, 1)	# Read the galaxy with ID=1 at the snapshot of 100
+		>>> print(g['id'])				# Print its ID
+
+		>>> h = veluga.r_gal(200, -1, horg='h')	# Read all halos at the snapshot of 200
+		>>> print(h['Mvir'][0])			# Print the virial mass of the first halo
 
 		"""
 
