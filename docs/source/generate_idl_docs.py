@@ -36,11 +36,11 @@ def extract_comments_from_idl(idl_file, target_functions):
                     next_line = next(file, None)
                     if next_line is None or next_line.strip() == ";+":
                         if current_comment:
-                            function_docs.append((current_function, "\n".join(current_comment)))
+                            function_docs.append((current_function, "\n".join(current_comment[2:])))
                         break
-                    current_comment.append(next_line.strip())
+                    current_comment.append(next_line.strip()[2:])
 
-    print(function_docs)
+    #print(function_docs)
     return function_docs
     
 def create_dummy_python_script(function_docs, output_file):
