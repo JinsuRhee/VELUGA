@@ -136,7 +136,41 @@ class veluga:
 	## Get Ramses Info
 	##-----
 	def g_info(self, snapnum):
+		"""
+		Info test.
+
+		This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+		
+		Parameters
+		----------
+		n_snap : int
+			Snapshot number
+		id0 : int
+			Object ID. Use a negative value to retrieve all objects in the snapshot.
+		horg : {'g', 'h'}
+			A flag to specify the object type. Use 'g' for galaxies and 'h' for halos.
+			Default is 'g'.
+
+		Returns
+		-------
+		structured_array
+			A structured array containing information about the objects.
+		
+		Raises
+		------
+		ValueError
+			If `n_snap` is not a valid snapshot number.
+			If `horg` is not one of {'g', 'h'}.
 	
+		Examples
+		--------
+		>>> g = veluga.r_gal(100, 1)	# Read the galaxy with ID=1 at the snapshot of 100
+		>>> print(g['id'])				# Print its ID
+
+		>>> h = veluga.r_gal(200, -1, horg='h')	# Read all halos at the snapshot of 200
+		>>> print(h['Mvir'][0])			# Print the virial mass of the first halo
+
+		"""
 		fname   = self.header.dir_raw + "output_%0.5d"%snapnum + "/info_%0.5d"%snapnum + ".txt"
 	   
 		fdata1  = np.loadtxt(fname, dtype=object, max_rows=6, delimiter='=')
@@ -188,7 +222,41 @@ class veluga:
 	## Get Physical time from conformal time
 	##-----
 	def g_ptime(self, n_snap, t_conf):
+		"""
+		Ptime test
 
+		This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+		
+		Parameters
+		----------
+		n_snap : int
+			Snapshot number
+		id0 : int
+			Object ID. Use a negative value to retrieve all objects in the snapshot.
+		horg : {'g', 'h'}
+			A flag to specify the object type. Use 'g' for galaxies and 'h' for halos.
+			Default is 'g'.
+
+		Returns
+		-------
+		structured_array
+			A structured array containing information about the objects.
+		
+		Raises
+		------
+		ValueError
+			If `n_snap` is not a valid snapshot number.
+			If `horg` is not one of {'g', 'h'}.
+	
+		Examples
+		--------
+		>>> g = veluga.r_gal(100, 1)	# Read the galaxy with ID=1 at the snapshot of 100
+		>>> print(g['id'])				# Print its ID
+
+		>>> h = veluga.r_gal(200, -1, horg='h')	# Read all halos at the snapshot of 200
+		>>> print(h['Mvir'][0])			# Print the virial mass of the first halo
+
+		"""
 		#----- Initial settings
 		info 	= self.g_info(n_snap)
 		
@@ -843,7 +911,7 @@ class veluga:
 	def r_part(self, n_snap, id0, horg='g', g_simunit=False, g_ptime=False):
 
 		"""
-		Load Galaxy/Halo Catalog Particle Data.
+		Load Galaxy/Halo Catalog Particle Data!.
 
 		This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
 		

@@ -9,10 +9,8 @@ Reading Catalog Functions
 The following functions are used for reading catalog data.
 
 .. automethod:: veluga.veluga.r_gal
-        :noindex:
 
 .. automethod:: veluga.veluga.r_part
-        :noindex:
 
 Getting Functions
 -----------------
