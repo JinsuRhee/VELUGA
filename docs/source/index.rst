@@ -7,7 +7,8 @@ Welcome to VELUGA's documentation!
 ==================================
 
 .. image:: _static/VELUGA_logo.png
-        :align: left
+        :align: center
+        :width: 25%
 
 .. toctree::
    :maxdepth: 2
