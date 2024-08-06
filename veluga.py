@@ -843,7 +843,7 @@ class veluga:
 	def r_part(self, n_snap, id0, horg='g', g_simunit=False, g_ptime=False):
 
 		"""
-		Load Galaxy/Halo Catalog Data.
+		Load Galaxy/Halo Catalog Particle Data.
 
 		This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
 		
@@ -877,7 +877,7 @@ class veluga:
 		>>> print(h['Mvir'][0])			# Print the virial mass of the first halo
 
 		"""
-		
+
 		## Load requirements
 		pid 	= self.r_pid(n_snap, id0, horg=horg)
 		dom_list= self.r_domain(n_snap, id0, horg=horg)
