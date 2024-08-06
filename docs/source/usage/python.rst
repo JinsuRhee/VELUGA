@@ -1,7 +1,7 @@
 Python Usage
 ============
 
-This section explains how to use the VELUGA library with Python.
+This section explains how to use the VELUGA library with Python.2
 
 Reading Catalog Functions
 -------------------------
@@ -9,8 +9,9 @@ Reading Catalog Functions
 The following functions are used for reading catalog data.
 
 .. autoclass:: veluga.veluga
-        :members: r_gal
+        :members: r_gal, r_part
         :undoc-members:
+        :show-inheritance:
 
 Getting Functions
 -----------------
