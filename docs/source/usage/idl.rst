@@ -6,8 +6,7 @@ This section explains how to use the VELUGA library with IDL
 Reading Catalog Functions
 -------------------------
 
-The following functions are used for reading catalog data.
+The following functions are used for reading catalog data2.
 
-.. automethod:: idl_dummy
-        :members: r_gal
+.. automethod:: idl_dummy.r_gal
 
