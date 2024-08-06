@@ -6,6 +6,9 @@
 Welcome to VELUGA's documentation!
 ==================================
 
+.. image:: _static/VELUGA_logo.png
+        :align: left
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
