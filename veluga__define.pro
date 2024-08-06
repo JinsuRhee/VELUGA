@@ -136,10 +136,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	; Parameters
 	; ----------
 	; snap0 : int
-	;	Snapshot number
+	; 	Snapshot number
 	;
 	; id0 : int
-	;	Object ID. Use a negative value to retrieve all objects in the snapshot.
+	; 	Object ID. Use a negative value to retrieve all objects in the snapshot.
 	;
 	; horg: 'h' or 'g'
 	;	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
@@ -160,7 +160,7 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	; IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
 	; IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
 	;+
-	
+
 	;;-----
 	;;
 	;; IF Grpop is argued, only selected field are read

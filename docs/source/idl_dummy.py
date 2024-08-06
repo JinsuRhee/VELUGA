@@ -10,10 +10,10 @@ class veluga:
         Parameters
         ----------
         snap0 : int
-        Snapshot number
+        	Snapshot number
         
         id0 : int
-        Object ID. Use a negative value to retrieve all objects in the snapshot.
+        	Object ID. Use a negative value to retrieve all objects in the snapshot.
         
         horg: 'h' or 'g'
         A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
