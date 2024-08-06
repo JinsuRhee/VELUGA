@@ -8,8 +8,8 @@ Reading Catalog Functions
 
 The following functions are used for reading catalog data.
 
-.. automodule:: veluga
-        :members: r_*
+.. autoclass:: veluga.veluga
+        :members: r_gal
         :undoc-members:
         :show-inheritance:
 
@@ -18,8 +18,8 @@ Getting Functions
 
 The following functions are utility functions used for data manipulation.
 
-.. automodule:: veluga
-        :members: g_*
+.. autoclass:: veluga.veluga
+        :members: g_info
         :undoc-members:
         :show-inheritance:
 
@@ -29,7 +29,7 @@ Drawing Functions
 The following functions are utility functions for drawing
 
 .. automodule:: veluga
-        :members: d_*
+        :members: d_2dmap
         :undoc-members:
         :show-inheritance:
 
