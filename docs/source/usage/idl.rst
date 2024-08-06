@@ -12,8 +12,8 @@ r_gal
 Load Galaxy/Halo Catalog Data.
 This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
 
-Parameters
-^^^^^^^^^^
+**Parameters**
+
 - **snap0** : int
         Snapshot number
 
@@ -25,19 +25,18 @@ Parameters
         Default is 'g'
 
 
-Returns
-^^^^^^^
+**Returns**
+
 Structured_array
-A structured array containing information about the objects.
-g = veluga->r_gal(100, 1)
+        A structured array containing information about the objects.
+        g = veluga->r_gal(100, 1)
 
-Examples
-^^^^^^^^
-IDL> g = veluga->r_gal(100, 1)	; Read the galaxy with ID=1 at the snapshot of 100
-IDL> PRINT, g[0].ID 				; Print its ID
+**Examples**
+        IDL> g = veluga->r_gal(100, 1)	; Read the galaxy with ID=1 at the snapshot of 100
+        IDL> PRINT, g[0].ID 				; Print its ID
 
-IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
-IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
+        IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
+        IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
 
 .. code-block:: idl
 
