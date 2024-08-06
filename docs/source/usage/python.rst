@@ -1,7 +1,7 @@
 Python Usage
 ============
 
-This section explains how to use the VELUGA library with Python.3
+This section explains how to use the VELUGA library with Python.
 
 Reading Catalog Functions
 -------------------------
