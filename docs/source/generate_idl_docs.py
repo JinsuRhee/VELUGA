@@ -17,7 +17,7 @@ def parse_idl_functions(file_path, target_functions):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
-    functions = {'r_*': [], 'g_*': [], 'd_*': []}
+    functions = {key:[] for key in target_functions}
     current_function = None
     current_comments = []
 
@@ -31,14 +31,12 @@ def parse_idl_functions(file_path, target_functions):
             if not '::' in line: continue
             current_function = line.split()[1].split('::')[1]  # Handle functions with arguments
             current_function = current_function[:-1]
-            print(current_function)
-            if current_function in target_functions:
-            	if current_function.startswith('r_'):
-            		functions['r_*'].append((current_function, current_comments))
-            	elif current_function.startswith('g_'):
-                	functions['g_*'].append((current_function, current_comments))
+            for group, func_names in target_functions.items():
+            	if current_function in func_names:
+            		
+            		functions[group].append((current_function, current_comments))
             current_comments = []  # Reset comments for next function
-
+    
     return functions
 
 def generate_rst_for_idl(file_path, output_rst, target_functions):
@@ -55,11 +53,21 @@ def generate_rst_for_idl(file_path, output_rst, target_functions):
     functions = parse_idl_functions(file_path, target_functions)
 
     with open(output_rst, 'w') as file:
-        file.write("IDL Functions\n")
+        file.write("IDL Usage\n")
         file.write("=============\n\n")
+        file.write("This section explains how to use the VELUGA library with IDL. \n\n")
 
-        file.write("Reading Functions\n")
-        file.write("-----------------\n\n")
+        for group, funcs in functions.items():
+        	file.write(f"{group}\n")
+        	file.write("-" * len(group) + "\n\n")
+
+        	for func_name, comments in funcs:
+        		file.write(f"{func_name}\n")
+        		file.write("-" * len(func_name) + "\n\n")
+        		file.write("".join(f"{comment}\n" for comment in comments) + "\n")
+        		file.write(".. code-block:: idl\n\n")
+        		file.write("    "+f"{func_name}\n\n")
+"""
         for func_name, comments in functions['r_*']:
             file.write(f"{func_name}\n")
             file.write("-" * len(func_name) + "\n\n")
@@ -84,13 +92,14 @@ def generate_rst_for_idl(file_path, output_rst, target_functions):
             file.write("".join(f"{comment}\n" for comment in comments) + "\n")
             file.write(".. code-block:: idl\n\n")
             file.write(f"    {func_name}\n\n")
+"""
 # Run
 
-target_functions = [
-	'r_gal', 
-	'g_part', 
-	'd_2dmap'
-]
+target_functions = {
+	"Reading Catalog Functions": ['r_gal'], 
+	"Getting Functions": ['g_part'], 
+	"Drawing Functions": ['d_2dmap']
+}
 
 generate_rst_for_idl('../../veluga__define.pro', 'usage/idl.rst', target_functions)
 
