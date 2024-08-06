@@ -1,13 +1,14 @@
-IDL Functions
+IDL Usage
 =============
 
-Reading Functions
------------------
+This section explains how to use the VELUGA library with IDL. 
+
+Reading Catalog Functions
+-------------------------
 
 r_gal
 -----
 
-+
 Load Galaxy/Halo Catalog Data.
 This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
 
@@ -37,7 +38,6 @@ IDL> PRINT, g[0].ID 				; Print its ID
 
 IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
 IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
-+
 
 .. code-block:: idl
 
@@ -60,4 +60,12 @@ positions are given in kpc unit
 
 Drawing Functions
 -----------------
+
+d_2dmap
+-------
+
+
+.. code-block:: idl
+
+    d_2dmap
 
