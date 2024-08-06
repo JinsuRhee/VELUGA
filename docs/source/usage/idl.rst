@@ -8,5 +8,4 @@ Reading Catalog Functions
 
 The following functions are used for reading catalog data2.
 
-.. toctree::
-        files
+.. automethod:: idl_dummy.veluga.r_gal
