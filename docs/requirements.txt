@@ -2,5 +2,6 @@ numpy
 pickle5
 scipy
 sphinx-rtd-theme
+sphinx-idl
 sphinxcontrib-jquery
 h5py

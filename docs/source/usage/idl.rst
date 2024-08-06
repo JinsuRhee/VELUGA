@@ -8,6 +8,5 @@ Reading Catalog Functions
 
 The following functions are used for reading catalog data2.
 
-.. automodule:: idl_dummy
-        :members: r_gal
-        :undoc-members:
+.. idl:autofile:: ../../../veluga__defione.pro
+.. automethod:: veluga.r_gal
