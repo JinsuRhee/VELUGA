@@ -8,10 +8,11 @@ Reading Catalog Functions
 
 The following functions are used for reading catalog data.
 
-.. autoclass:: veluga.veluga
-        :members: r_gal, r_part
-        :undoc-members:
-        :show-inheritance:
+.. automethod:: veluga.veluga.r_gal
+        :noindex:
+
+.. automethod:: veluga.veluga.r_part
+        :noindex
 
 Getting Functions
 -----------------
