@@ -8,6 +8,6 @@ Reading Catalog Functions
 
 The following functions are used for reading catalog data.
 
-.. automethod:: idl_dummy.r_gal
-        :noindex
+.. automethod:: idl_dummy
+        :members: r_gal
 
