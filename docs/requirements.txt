@@ -1,6 +1,0 @@
-numpy
-pickle5
-scipy
-sphinx-rtd-theme
-sphinxcontrib-jquery
-h5py
