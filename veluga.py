@@ -842,7 +842,42 @@ class veluga:
 	##-----
 	def r_part(self, n_snap, id0, horg='g', g_simunit=False, g_ptime=False):
 
+		"""
+		Load Galaxy/Halo Catalog Data.
 
+		This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+		
+		Parameters
+		----------
+		n_snap : int
+			Snapshot number
+		id0 : int
+			Object ID. Use a negative value to retrieve all objects in the snapshot.
+		horg : {'g', 'h'}
+			A flag to specify the object type. Use 'g' for galaxies and 'h' for halos.
+			Default is 'g'.
+
+		Returns
+		-------
+		structured_array
+			A structured array containing information about the objects.
+		
+		Raises
+		------
+		ValueError
+			If `n_snap` is not a valid snapshot number.
+			If `horg` is not one of {'g', 'h'}.
+	
+		Examples
+		--------
+		>>> g = veluga.r_gal(100, 1)	# Read the galaxy with ID=1 at the snapshot of 100
+		>>> print(g['id'])				# Print its ID
+
+		>>> h = veluga.r_gal(200, -1, horg='h')	# Read all halos at the snapshot of 200
+		>>> print(h['Mvir'][0])			# Print the virial mass of the first halo
+
+		"""
+		
 		## Load requirements
 		pid 	= self.r_pid(n_snap, id0, horg=horg)
 		dom_list= self.r_domain(n_snap, id0, horg=horg)
