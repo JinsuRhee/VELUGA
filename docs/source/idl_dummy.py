@@ -48,10 +48,10 @@ class veluga:
         
         Parameters
         ----------
-        snap0 : int
+        snap0 : long
         	Snapshot number
         
-        id0 : int
+        id0 : long
         	Object ID.
         
         horg: string {'h' or 'g'}
@@ -78,7 +78,7 @@ class veluga:
         	ap : [simulation unit]
         		birth time
         	zp : []
-        		metallicitiy
+        		metallicity
         	gyr : [Gyr]
         		birth time in Gyr (retrieved if g_ptime=True)
         	sfact: []
@@ -91,13 +91,13 @@ class veluga:
         		mpi domain number to which particles belong
         	KE : [km^2/s^2]
         		specific Kinetic energy
-        		retrieved when g_potential is called (Not implemented yet)
+        		retrieved when g_potential is called
         	UE : [km^2/s^2]
         		specific Internal energy
-        		retrieved when g_potential is called (Not implemented yet)
+        		retrieved when g_potential is called
         	PE : [km^2/s^2]
         		specific Potential energy
-        		retrieved when g_potential is called (Not implemented yet)
+        		retrieved when g_potential is called
         
         Examples
         --------
@@ -116,8 +116,90 @@ class veluga:
         IDL> ; extract particles with an index
         
         IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+        
         IDL> index = WHERE(g.gyr LT 1.)
+        
         IDL> g_new = veluga->g_extract(g, index)
+        	Return a new structure with a given index
+
+        """
+        pass
+
+    def r_cell():
+        """
+        This method retrieves cell information near a halo/galaxy given
+        
+        Parameters
+        ----------
+        snap0 : long
+        	Snapshot number
+        
+        id0 : long
+        	Object ID.
+        
+        dx : double
+        	aperture
+        
+        horg: string {'h' or 'g'}
+        	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+        	Default is 'g'
+        
+        g_simunit: boolean
+        	If set (/g_simunit), return output unit as the ramses simulation unit
+        
+        
+        
+        Returns
+        -------
+        Structure
+        	xx, yy, zz : [kpc (physical)]
+        		position of cells
+        	vx, vy, vz : [km/s]
+        		velocity of cells
+        	dx : [kpc]
+        		cell size
+        	level : []
+        		cell AMR level
+        	den : [cc]
+        		density of cells
+        	temp : [K/mu]
+        		temperature of cells
+        	zp : []
+        		metallicity of cells
+        	mp : [Msun]
+        		mass of cells
+        	KE : [km^2/s^2]
+        		specific Kinetic energy
+        		retrieved when g_potential is called
+        	UE : [km^2/s^2]
+        		specific Internal energy
+        		retrieved when g_potential is called
+        	PE : [km^2/s^2]
+        		specific Potential energy
+        		retrieved when g_potential is called
+        	Chem_H, ... : []
+        		chemical abundance
+        	dust_N, ... : []
+        		dust abundance
+        
+        Examples
+        --------
+        IDL> cell = veluga->r_cell(100L, 1L, 10.)
+        		Retrieve information of the cells within a box with a length of 10 kpc centered at a galaxy
+        
+        IDL> PRINT, cell.xx[0]
+        		Print x-coordinate of the first cell
+        
+        IDL> cell = veluga->r_cell(100L, 10L, 100.d, horg='h')
+        		Retrieve information of the cells (within a box of length 100 kpc) for a halo (ID=10)
+        
+        IDL> ; extract cells with an index
+        
+        IDL> cell = veluga->r_cell(100, 10, horg='g')
+        
+        IDL> index = WHERE(cell.level GE 15L)
+        
+        IDL> cell_new = veluga->g_extract(cell, index)
         	Return a new structure with a given index
 
         """

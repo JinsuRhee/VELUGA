@@ -342,10 +342,10 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_p
 	; 
 	; Parameters
 	; ----------
-	; snap0 : int
+	; snap0 : long
 	; 	Snapshot number
 	;
-	; id0 : int
+	; id0 : long
 	; 	Object ID.
 	;
 	; horg: string {'h' or 'g'}
@@ -359,32 +359,39 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_p
 	; 	If set (/g_ptime), retrieve physical time unit for the age of particles
 	; 	Stored in gyr, sfact, and redsh tag
 	;
-	; Outputs
-	; -------
-	; xx, yy, zz : position [kpc (physical)]
-	; vx, vy, vz : velocity [km/s]
-	; mp : mass [Msun]
-	; ap : birth time [simulation unit]
-	; zp : metallicitiy
-	; gyr : birth time in Gyr
-	; 		retrieved if /g_ptime
-	; sfact: birth time in scale factor
-	; 		retrieved if /g_ptime
-	; redsh: birth time in redshfit
-	; 		retrieved if /g_ptime
-	; id : Particle ID
-	; domain : mpi domain number to which particles belong
-	; KE : specific Kinetic energy [km^2/s^2]
-	; 		retrieved when g_potential ftn is called
-	; UE : specific Internal energy [km^2/s^2]
-	; 		retrieved when g_potential ftn is called
-	; PE : specific Potential energy [km^2/s^2]
-	; 		retrieved when g_potential ftn is called
 	;
 	; Returns
 	; -------
 	; Structure
-	; 	A structure containing information about member particles.
+	; 	xx, yy, zz : [kpc (physical)]
+	; 		position of particles
+	; 	vx, vy, vz : [km/s]
+	; 		velocity of particles
+	; 	mp : [Msun]
+	; 		mass of particles
+	; 	ap : [simulation unit]
+	; 		birth time
+	; 	zp : []
+	; 		metallicity
+	; 	gyr : [Gyr]
+	; 		birth time in Gyr (retrieved if g_ptime=True)
+	; 	sfact: []
+	; 		birth time in scale factor (retrieved if g_ptime=True)
+	; 	redsh: []
+	; 		birth time in redshift (retrieved if g_ptime=True)
+	; 	id : []
+	; 		Particle ID
+	; 	domain : []
+	; 		mpi domain number to which particles belong
+	; 	KE : [km^2/s^2]
+	; 		specific Kinetic energy
+	; 		retrieved when g_potential is called
+	; 	UE : [km^2/s^2]
+	; 		specific Internal energy
+	; 		retrieved when g_potential is called
+	; 	PE : [km^2/s^2]
+	; 		specific Potential energy
+	; 		retrieved when g_potential is called
 	;
 	; Examples
 	; --------
@@ -403,7 +410,9 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_p
 	; IDL> ; extract particles with an index
 	;
 	; IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+	;
 	; IDL> index = WHERE(g.gyr LT 1.)
+	;
 	; IDL> g_new = veluga->g_extract(g, index)
 	;		Return a new structure with a given index
 	;+
@@ -542,13 +551,92 @@ FUNCTION veluga::r_domain, snap0, id0, horg=horg
 	RETURN, cut
 END
 
-FUNCTION veluga::r_cell, snap0, id0, rsize, horg=horg
-	;;-----
-	;; READ AMR CELL around a galaxy
-	;;-----
+FUNCTION veluga::r_cell, snap0, id0, rsize, horg=horg, g_simout=g_simout
+	;+
+	; Load cell surrouding a given Galaxy/Halo.
+	; This method retrieves cell information near a halo/galaxy given
+	; 
+	; Parameters
+	; ----------
+	; snap0 : long
+	; 	Snapshot number
+	;
+	; id0 : long
+	; 	Object ID.
+	;
+	; dx : double
+	; 	aperture
+	;
+	; horg: string {'h' or 'g'}
+	; 	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+	; 	Default is 'g'
+	;
+	; g_simunit: boolean
+	; 	If set (/g_simunit), return output unit as the ramses simulation unit
+	;
+	;
+	;
+	; Returns
+	; -------
+	; Structure
+	; 	xx, yy, zz : [kpc (physical)]
+	; 		position of cells
+	; 	vx, vy, vz : [km/s]
+	; 		velocity of cells
+	; 	dx : [kpc]
+	; 		cell size
+	; 	level : []
+	; 		cell AMR level
+	; 	den : [cc]
+	; 		density of cells
+	; 	temp : [K/mu]
+	; 		temperature of cells
+	; 	zp : []
+	; 		metallicity of cells
+	; 	mp : [Msun]
+	; 		mass of cells
+	; 	KE : [km^2/s^2]
+	; 		specific Kinetic energy
+	; 		retrieved when g_potential is called
+	; 	UE : [km^2/s^2]
+	; 		specific Internal energy
+	; 		retrieved when g_potential is called
+	; 	PE : [km^2/s^2]
+	; 		specific Potential energy
+	; 		retrieved when g_potential is called
+	; 	Chem_H, ... : []
+	; 		chemical abundance
+	; 	dust_N, ... : []
+	; 		dust abundance
+	;
+	; Examples
+	; --------
+	; IDL> cell = veluga->r_cell(100L, 1L, 10.)
+	; 		Retrieve information of the cells within a box with a length of 10 kpc centered at a galaxy
+	;
+	; IDL> PRINT, cell.xx[0]
+	; 		Print x-coordinate of the first cell
+	;
+	; IDL> cell = veluga->r_cell(100L, 10L, 100.d, horg='h')
+	; 		Retrieve information of the cells (within a box of length 100 kpc) for a halo (ID=10)
+	;
+	; IDL> ; extract cells with an index
+	;
+	; IDL> cell = veluga->r_cell(100, 10, horg='g')
+	;
+	; IDL> index = WHERE(cell.level GE 15L)
+	;
+	; IDL> cell_new = veluga->g_extract(cell, index)
+	;		Return a new structure with a given index
+	;+
+	
 
 	gal 	= self->r_gal(snap0, id0, horg=horg)
-	RETURN, self->g_cell(gal.xc, gal.yc, gal.zc, rsize, snap0)
+	IF KEYWORD_SET(g_simout) THEN BEGIN
+		RETURN, self->g_cell(snap0, gal.xc, gal.yc, gal.zc, rsize, /g_simout)	
+	ENDIF ELSE BEGIN
+		RETURN, self->g_cell(snap0, gal.xc, gal.yc, gal.zc, rsize)
+	ENDELSE
 END
 
 FUNCTION veluga::r_tree_load, horg=horg
@@ -1014,12 +1102,12 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	ENDELSE
 END
 
-FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout, ptime=ptime
+FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, ptime=ptime
 
 	;;-----
 	;; Read Particle within a sphere
 	;; IF dom_list is set, read all ptcls in the argued domain list
-	;;	/simout 	- output as the raw simulation unit
+	;;	/g_simout 	- output as the raw simulation unit
 	;;-----
 
 	settings	= self->getheader()
@@ -1098,7 +1186,7 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part 	= self->allocate(npart_tot, type='part')
 	;REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L}, npart_tot)
 
-	IF ~KEYWORD_SET(simout) THEN BEGIN
+	IF ~KEYWORD_SET(g_simout) THEN BEGIN
 		xp 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
 		vp 	*= info.kms 					;; [kms]
 		mp 	*= (info.unit_m / info.cgs.m_sun); [Msun]
@@ -1134,7 +1222,7 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout, timereport=timereport
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, timereport=timereport
 	;;-----
 	;; Read AMR cells within a sphere
 	;;	snap0: [1] integer
@@ -1147,7 +1235,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	;;		domain_list
 	;;		If set, read all cells in the argued domain. If not, read all cells inside rr2 + dx
 	;;
-	;;	simout: boolean
+	;;	g_simout: boolean
 	;;		If set, output as the raw code unit
 	;;
 	;;	timereport: boolean
@@ -1179,10 +1267,10 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		zr	= [-1d,1d] * rr + zc
 	ENDIF
 
-	IF ~KEYWORD_SET(range_refine) THEN range_refine = [-1.d, 2.d]
-	IF ~KEYWORD_SET(range_xx) THEN range_xx = [-2.d, 2.d]
-	IF ~KEYWORD_SET(range_yy) THEN range_yy = [-2.d, 2.d]
-	IF ~KEYWORD_SET(range_zz) THEN range_zz = [-2.d, 2.d]
+	;IF ~KEYWORD_SET(range_refine) THEN range_refine = [-1.d, 2.d]
+	;IF ~KEYWORD_SET(range_xx) THEN range_xx = [-2.d, 2.d]
+	;IF ~KEYWORD_SET(range_yy) THEN range_yy = [-2.d, 2.d]
+	;IF ~KEYWORD_SET(range_zz) THEN range_zz = [-2.d, 2.d]
 
 	file_a	= dir + '/amr_' + STRING(snap0,'(I5.5)') + '.out'
 	file_h	= dir + '/hydro_' + STRING(snap0,'(I5.5)') + '.out'
@@ -1218,6 +1306,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		cell.xx 	= -1.d
 		RETURN, cell
 	ENDIF
+
 
 	mesh_xg	= DBLARR(ntot,info.ndim)
 	mesh_vx	= DBLARR(ntot,info.ndim)
@@ -1255,7 +1344,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		larr(14)= nz
 		larr(15)= nboundary
 
-		IF ~KEYWORD_SET(simout) THEN BEGIN
+		IF ~KEYWORD_SET(g_simout) THEN BEGIN
 			tokpc 	= (info.unit_l/info.cgs.kpc)	;; [kpc]
 			tokms	= info.kms 						;; [km/s]
 			tomsun 	= info.unit_d * info.unit_l^3.d / info.cgs.m_sun 	;; [Msun]

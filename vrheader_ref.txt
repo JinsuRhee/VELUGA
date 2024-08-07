@@ -28,7 +28,7 @@ skiprd_domain	= -1	;; skip reading domain in particle data
 skiprd_time 	= -1	;; skip reading time in particle data
 skiprd_metal	= -1	;; skip reading metal in particle data
 
-hydro_variables = ['den', 'vx', 'vy', 'vz', 'temp', 'zp', 'skip']
+hydro_variables = ['den', 'vx', 'vy', 'vz', 'temp', 'zp', 'skip'] ;; the first 6 elements should be fixed (from den to zp)
 
 ##-----
 ## Post processing related

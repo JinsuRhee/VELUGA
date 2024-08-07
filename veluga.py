@@ -82,11 +82,21 @@ class veluga:
 				('id', np.int64), ('KE', '<f8'), ('UE', '<f8'), ('PE', '<f8')]
 			#return array
 		elif(type=='cell'):
-			print('add hydrovariables here')
+			header 	= self.header
 			dtype = [('xx', '<f8'), ('yy', '<f8'), ('zz', '<f8'),
 				('vx', '<f8'), ('vy', '<f8'), ('vz', '<f8'),
 				('level', np.int32), ('dx', '<f8'), ('den', '<f8'), ('temp', '<f8'), ('zp', '<f8'), ('mp', '<f8'), 
 				('KE', '<f8'), ('UE', '<f8'), ('PE', '<f8')]
+
+			if len(header.hydro_variables) <= 7:
+				# common hydro variables set (den, vx, vy, vz, pressure, metallicity, passive scalar)
+				a = 1 # do nothing
+			else:
+				additional_hvar_tag	= header.hydro_variables[6:]
+				
+
+				for htag in additional_hvar_tag:
+					dtype = dtype +  [(htag, '<f8')]
 
 		return np.zeros(npart, dtype=dtype)
 
@@ -529,6 +539,7 @@ class veluga:
 			z0_s = np.double(0.5)
 			dl_s = np.double(1e8)
 
+		print(dom_list)
 		##----- Fortran Settigns
 		self.ramses_cell_input(get_cell_py)
 
@@ -547,11 +558,12 @@ class veluga:
 		cell['yy'] 	= get_cell_py.p_dbl[:,1]
 		cell['zz'] 	= get_cell_py.p_dbl[:,2]
 
-		hind = np.int32(3)
+		hind = np.int32(2)
 		for htag in self.header.hydro_variables:
-			if htag == 'skip': continue
-			cell[htag] = get_cell_py.p_dbl[:,hind]
 			hind += 1
+			if 'skip' in htag: continue
+			cell[htag] = get_cell_py.p_dbl[:,hind]
+			
 
 		cell['dx'] 	= get_cell_py.p_dbl[:,hind+1]
 		cell['level'] = get_cell_py.p_int[:,0]
@@ -565,16 +577,30 @@ class veluga:
 		cell['UE'] = cell['temp']/cell['den']/(5./3.-1.) * info['unit_T2'] / (1.66e-24) * 1.38049e-23 * 1e-3 ## [km/s]^2
 		cell['temp']*= (1./cell['den'])
 
+		## Unit conversion
 		if(g_simunit==False):
-			cell['xx'] 	*= (info['unit_l'] / info['cgs']['kpc'])
-			cell['yy'] 	*= (info['unit_l'] / info['cgs']['kpc'])
-			cell['zz'] 	*= (info['unit_l'] / info['cgs']['kpc'])
-			cell['vx'] 	*= (info['kms'])
-			cell['vy'] 	*= (info['kms'])
-			cell['vz'] 	*= (info['kms'])
-			cell['dx']	*= (info['unit_l'] / info['cgs']['kpc'])
-			cell['den'] *= info['nH']		# [/cc]
-			cell['temp']*= info['unit_T2'] 		# [K/mu]
+			unit_pos 	= (info['unit_l'] / info['cgs']['kpc'])
+			unit_vel 	= (info['kms'])
+			unit_mass 	= (info['unit_m'] / info['cgs']['m_sun'])
+			unit_den 	= info['nH']
+			unit_temp 	= info['unit_T2']
+		else:
+			unit_pos = 1.
+			unit_vel = 1.
+			unit_mass = 1.
+			unit_den = 1.
+			unit_temp = 1.
+
+
+		cell['xx'] 	*= unit_pos
+		cell['yy'] 	*= unit_pos
+		cell['zz'] 	*= unit_pos
+		cell['vx'] 	*= unit_vel
+		cell['vy'] 	*= unit_vel
+		cell['vz'] 	*= unit_vel
+		cell['dx']	*= unit_pos
+		cell['den'] *= unit_den
+		cell['temp']*= unit_temp
 
 		
 
@@ -872,11 +898,70 @@ class veluga:
 	## Return cell in a box with dx^3 centered at the galaxy center
 	##	
 	##-----
-	def r_cell(self, n_snap, id0, dx, horg='g'):
+	def r_cell(self, n_snap, id0, dx, horg='g', g_simunit=False):
+		"""
+		Load cell surrouding a given Galaxy/Halo.
+
+		This method retrieves cell information near a halo/galaxy given
+		
+		Parameters
+		----------
+		n_snap : int
+			Snapshot number
+		id0 : int
+			Object ID.
+		dx: double
+			aperture size
+		horg : {'g', 'h'}
+			A flag to specify the object type. Use 'g' for galaxies and 'h' for halos.
+			Default is 'g'.
+		g_simunit: {True or False}
+			Output unit as the ramses simulation unit
+
+		Returns
+		-------
+		numpy array
+			xx, yy, zz : [kpc (physical)]
+				position of cells
+			vx, vy, vz : [km/s]
+				velocity of cells
+			dx : [kpc]
+				cell size
+			level : []
+				cell AMR level
+			den : [cc]
+				density of cells
+			temp : [K/mu]
+				temperature of cells
+			zp : []
+				metallicity of cells
+			mp : [Msun]
+				mass of cells
+			KE : [km^2/s^2]
+				specific Kinetic energy
+				retrieved when g_potential is called (Not implemented yet)
+			UE : [km^2/s^2]
+				specific Internal energy
+				retrieved when g_potential is called (Not implemented yet)
+			PE : [km^2/s^2]
+				specific Potential energy
+				retrieved when g_potential is called (Not implemented yet)
+			chem_H, ... : []
+				chemical abundance
+			dust_N : []
+				dust abundance
+	
+		Examples
+		--------
+		>>> cell = veluga.r_cell(100, 1, 10.)	# Retrieve information of the cells within a box with a length of 10 kpc centered at a galaxy
+		>>> print(cell['xx'])					# Print their x coordinates
+
+		>>> cell = veluga.r_cell(100, 10, 100, horg='h')   # Retrieve information of the cells (within a box of length 100 kpc) for a halo (ID=10)
+		"""
 
 		g = self.r_gal(n_snap, id0, horg=horg)
 
-		return g_cell(n_snap, g['Xc'], g['Yc'], g['Zc'], dx)
+		return self.g_cell(n_snap, g['Xc'], g['Yc'], g['Zc'], dx, g_simunit=g_simunit)
 
 
 	##-----
@@ -922,7 +1007,6 @@ class veluga:
 	##	simout=True results in data unit in simulation units
 	##-----
 	def r_part(self, n_snap, id0, horg='g', g_simunit=False, g_ptime=False):
-
 		"""
 		Load Member Particle of a given Galaxy/Halo Data.
 

@@ -21,6 +21,8 @@ MODULE read_ramses_py
 
         REAL(KIND=8) dmp_mass
         INTEGER(KIND=4) n_snap, n_mpi, levmax, n_dim, n_var
+
+        INTEGER(KIND=4) nx, ny, nz, nboundary !! Hydro related
     END TYPE ramses_type
 CONTAINS
 
@@ -224,8 +226,8 @@ SUBROUTINE read_cell(ftype, dom_list, n_thread)
 
 
     CHARACTER(1000) domnum, fdum_a, fdum_h, fdum_i, snap
-    INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: mg_num
-    INTEGER(KIND=4), DIMENSION(:), ALLOCATABLE :: mg_ind, mg_indtmp
+    !INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: mg_num
+    !INTEGER(KIND=4), DIMENSION(:), ALLOCATABLE :: mg_ind, mg_indtmp
     INTEGER(KIND=4) ind_tmp, merge_ind, merge_ind2
 
     !!----- INFO VAR
@@ -245,6 +247,7 @@ SUBROUTINE read_cell(ftype, dom_list, n_thread)
 
     !!----- HYDRO VAR
     INTEGER(KIND=4) uout_h
+    INTEGER(KIND=4) nx, ny, nz, nboundary
 
     !!----- LOOP VAR
     REAL(KIND=8) dx, dx2
@@ -266,13 +269,13 @@ SUBROUTINE read_cell(ftype, dom_list, n_thread)
     !!-----
     ndom = SIZE(dom_list)
 
-    ALLOCATE(mg_num(1:ftype%n_mpi, 1:ftype%levmax))
-    ALLOCATE(mg_indtmp(1:ftype%n_mpi))
-    ALLOCATE(mg_ind(1:ftype%n_mpi))
+    !ALLOCATE(mg_num(1:ftype%n_mpi, 1:ftype%levmax))
+    !ALLOCATE(mg_indtmp(1:ftype%n_mpi))
+    !ALLOCATE(mg_ind(1:ftype%n_mpi))
 
-    mg_num = 0
-    mg_indtmp = 0
-    mg_ind = 0
+    !mg_num = 0
+    !mg_indtmp = 0
+    !mg_ind = 0
     ndim = ftype%n_dim
     ncpu = ftype%n_mpi
 
@@ -282,12 +285,32 @@ SUBROUTINE read_cell(ftype, dom_list, n_thread)
     WRITE(domnum, '(I5.5)') dom_list(1)
     WRITE(snap,'(I5.5)') ftype%n_snap
 
-
     fdum_h = TRIM(ftype%dir_raw)//'/output_'//TRIM(snap)//'/hydro_'// &
         TRIM(snap)//'.out'//TRIM(domnum)
 
     OPEN(unit=10, file=fdum_h, form='unformatted', status='old')
     READ(10); READ(10) n_varh; CLOSE(10)
+
+    !!-----
+    !! READ AMR HEADER
+    !!-----
+    fdum_a  = TRIM(fname_a)//TRIM(domnum)
+    OPEN(UNIT=11, FILE=fdum_a, FORM='unformatted', STATUS='old')
+    READ(11); READ(11); READ(11) nx, ny, nz
+    READ(11); READ(11); READ(11) nboundary
+    READ(11); READ(11)
+    CLOSE(11)
+
+    ftype%nx  = nx
+    ftype%ny  = ny
+    ftype%nz  = nz
+    ftype%nboundary  = nboundary
+
+    IF(nboundary>0) ALLOCATE(ngridbound(1:nboundary,1:ftype%levmax))
+    ALLOCATE(ngridfile(1:ncpu+nboundary,1:ftype%levmax))
+
+
+
 
     !!-----
     !! COUNT TOTAL NUM OF CELLS
@@ -311,6 +334,11 @@ SUBROUTINE read_cell(ftype, dom_list, n_thread)
             READ(uout)
         ENDDO
         READ(uout) mg_num
+
+        !!!!!
+        READ(uout)
+        IF
+        !!!!!
         CLOSE(uout)
 
         ind_tmp = 0
@@ -337,7 +365,9 @@ SUBROUTINE read_cell(ftype, dom_list, n_thread)
     ENDDO
     n_cell = ind_tmp
 
-    DEALLOCATE(mg_num, mg_indtmp)
+    IF(nboundary>0)DEALLOCATE(ngridbound)
+    DEALLOCATE(ngridfile)
+
 
     !!-----
     !! ALLOCATE
@@ -620,7 +650,7 @@ SUBROUTINE read_amr(ftype, dom_list, n_thread)
 
 
     CHARACTER(1000) domnum, fdum_a, fdum_h, fdum_i, snap
-    INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: mg_num
+    !INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: ngridfile, ngridbound
     INTEGER(KIND=4), DIMENSION(:), ALLOCATABLE :: mg_ind, mg_indtmp
     INTEGER(KIND=4) ind_tmp, merge_ind, merge_ind2
 
