@@ -11,3 +11,5 @@ The following functions are used for reading catalog data.
 .. automethod:: idl_dummy.veluga.r_gal
 
 .. automethod:: idl_dummy.veluga.r_part
+
+.. automethod:: idl_dummy.veluga.r_cell

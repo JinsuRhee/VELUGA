@@ -12,6 +12,8 @@ The following functions are used for reading catalog data.
 
 .. automethod:: veluga.veluga.r_part
 
+.. automethod:: veluga.veluga.r_cell
+
 Getting Functions
 -----------------
 
