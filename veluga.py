@@ -67,10 +67,20 @@ class veluga:
 	def allocate(self, npart, type=None):
 
 		if(type=='part'):
+			#dblarr = np.zeros(npart, dtype='<f8')
+			#lonarr = np.zeros(npart, dtype=np.int32)
+
+			#array = {'xx':dblarr, 'yy':dblarr, 'zz':dblarr, 
+			#	'vx':dblarr, 'vy':dblarr, 'vz':dblarr, 
+			#	'mp':dblarr, 'ap':dblarr, 'zp':dblarr, 
+			#	'gyr':dblarr, 'sfact':dblarr, 'redsh':dblarr, 
+			#	'family':lonarr, 'domain':lonarr, 'id':lonarr, 
+			#	'KE':dblarr, 'UE':dblarr, 'PE':dblarr}
 			dtype = [('xx', '<f8'), ('yy', '<f8'), ('zz', '<f8'),
 				('vx', '<f8'), ('vy', '<f8'), ('vz', '<f8'),
 				('mp', '<f8'), ('ap', '<f8'), ('zp', '<f8'), ('gyr', '<f8'), ('sfact', '<f8'), ('redsh', '<f8'), ('family', np.int32) , ('domain', np.int32), 
 				('id', np.int64), ('KE', '<f8'), ('UE', '<f8'), ('PE', '<f8')]
+			#return array
 		elif(type=='cell'):
 			print('add hydrovariables here')
 			dtype = [('xx', '<f8'), ('yy', '<f8'), ('zz', '<f8'),
@@ -304,7 +314,7 @@ class veluga:
 		oL     = info['oL']
 
 		# reference path is correct?
-		fname 	= 'table/cft_%0.5d'%(H0*1000.) + '_%0.5d'%(oM*100000.) + '_%0.5d'%(oL*100000.) + '.pkl'
+		fname 	= self.root_path + '/table/cft_%0.5d'%(H0*1000.) + '_%0.5d'%(oM*100000.) + '_%0.5d'%(oL*100000.) + '.pkl'
 		isfile 	= os.path.isfile(fname)
 
 		if(isfile==True):
@@ -336,7 +346,7 @@ class veluga:
 		oM     = info['oM']
 		oL     = info['oL']
 
-		fname   = 'table/gyr_%0.5d'%(H0*1000.) + '_%0.5d'%(oM*100000.) + '_%0.5d'%(oL*100000.) + '.pkl'
+		fname   = self.root_path + '/table/gyr_%0.5d'%(H0*1000.) + '_%0.5d'%(oM*100000.) + '_%0.5d'%(oL*100000.) + '.pkl'
 		isfile = os.path.isfile(fname)
 
 		if(isfile==True):
@@ -448,6 +458,7 @@ class veluga:
 		if(ptype == 'all'): get_ptcl_py.r_ptype = np.int32(0)
 		elif(ptype == 'dm'): get_ptcl_py.r_ptype = np.int32(1)
 		elif(ptype == 'star'): get_ptcl_py.r_ptype = np.int32(2)
+
 		get_ptcl_py.dmp_mass = dmp_mass
 
 		## Get by Fortran
@@ -718,11 +729,6 @@ class veluga:
 		structured_array
 			A structured array containing information about the objects.
 		
-		Raises
-		------
-		ValueError
-			If `n_snap` is not a valid snapshot number.
-			If `horg` is not one of {'g', 'h'}.
 	
 		Examples
 		--------
@@ -918,38 +924,61 @@ class veluga:
 	def r_part(self, n_snap, id0, horg='g', g_simunit=False, g_ptime=False):
 
 		"""
-		Load Galaxy/Halo Catalog Particle Data!.
+		Load Member Particle of a given Galaxy/Halo Data.
 
-		This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+		This method retrieves particle information of a given galaxy or halo
 		
 		Parameters
 		----------
 		n_snap : int
 			Snapshot number
 		id0 : int
-			Object ID. Use a negative value to retrieve all objects in the snapshot.
+			Object ID.
 		horg : {'g', 'h'}
 			A flag to specify the object type. Use 'g' for galaxies and 'h' for halos.
 			Default is 'g'.
+		g_simunit: {True or False}
+			Output unit as the ramses simulation unit
+		g_ptime: {True or False}
+			Retrieve physical time unit for the age of particles
+			Stored in gyr, sfact, and redsh tag
+
+		Outputs
+		-------
+		xx, yy, zz : position [kpc (physical)]
+		vx, vy, vz : velocity [km/s]
+		mp : mass [Msun]
+		ap : birth time [simulation unit]
+		zp : metallicitiy
+		gyr : birth time in Gyr
+			retrieved if g_ptime=True
+		sfact: birth time in scale factor
+			retrieved if g_ptime=True
+		redsh: birth time in redshfit
+			retrieved if g_ptime=True
+		id : Particle ID
+		domain : mpi domain number to which particles belong
+		KE : specific Kinetic energy [km^2/s^2]
+			retrieved when g_potential is called (Not implemented yet)
+		UE : specific Internal energy [km^2/s^2]
+			retrieved when g_potential is called (Not implemented yet)
+		PE : specific Potential energy [km^2/s^2]
+			retrieved when g_potential is called (Not implemented yet)
+
 
 		Returns
 		-------
-		structured_array
-			A structured array containing information about the objects.
-		
-		Raises
-		------
-		ValueError
-			If `n_snap` is not a valid snapshot number.
-			If `horg` is not one of {'g', 'h'}.
+		numpy array
 	
 		Examples
 		--------
-		>>> g = veluga.r_gal(100, 1)	# Read the galaxy with ID=1 at the snapshot of 100
-		>>> print(g['id'])				# Print its ID
+		>>> g = veluga.r_part(100, 1)	# Retrieve information of the member star particle of the galaxy with ID=1 at the snapshot of 100
+		>>> print(g['id'])				# Print their ID
 
-		>>> h = veluga.r_gal(200, -1, horg='h')	# Read all halos at the snapshot of 200
-		>>> print(h['Mvir'][0])			# Print the virial mass of the first halo
+		>>> g = veluga.r_part(100, 10, horg='g', g_ptime=True)   # Retrieve information of the member star particles (including their birth time properties) that belong to the galaxy with ID=10 at the snapshot of 100
+
+		>>> h = veluga.r_gal(200, 5, horg='h')	# Retrieve information of the member DM particle of the halo with ID=5 and snapshot=200.
+
 
 		"""
 
@@ -969,35 +998,40 @@ class veluga:
 
 		if(horg == 'h'): get_ptcl_py.dmp_mass = dmp_mass
 
+		## Unit conversion
+		if(g_simunit==False):
+			unit_pos 	= (info['unit_l'] / info['cgs']['kpc'])
+			unit_vel 	= (info['kms'])
+			unit_mass 	= (info['unit_m'] / info['cgs']['m_sun'])
+		else:
+			unit_pos = 1.
+			unit_vel = 1.
+			unit_mass = 1.
+
 		## Get by Fortran
 		get_ptcl_py.get_ptcl(n_snap, pid, dom_list)
 
 		## Allocate
 		part 	= self.allocate(n_ptcl, type='part')
+		#print(get_ptcl_py.p_lnt[:5,1])
+		
 
-		part['xx'] 	= get_ptcl_py.p_dbl[:,0]
-		part['yy'] 	= get_ptcl_py.p_dbl[:,1]
-		part['zz'] 	= get_ptcl_py.p_dbl[:,2]
-		part['vx'] 	= get_ptcl_py.p_dbl[:,3]
-		part['vy'] 	= get_ptcl_py.p_dbl[:,4]
-		part['vz'] 	= get_ptcl_py.p_dbl[:,5]
-		part['mp'] 	= get_ptcl_py.p_dbl[:,6]
+		part['xx'] 	= get_ptcl_py.p_dbl[:,0] * unit_pos
+		part['yy'] 	= get_ptcl_py.p_dbl[:,1] * unit_pos
+		part['zz'] 	= get_ptcl_py.p_dbl[:,2] * unit_pos
+		part['vx'] 	= get_ptcl_py.p_dbl[:,3] * unit_vel
+		part['vy'] 	= get_ptcl_py.p_dbl[:,4] * unit_vel
+		part['vz'] 	= get_ptcl_py.p_dbl[:,5] * unit_vel
+		part['mp'] 	= get_ptcl_py.p_dbl[:,6] * unit_mass
 		part['ap'] 	= get_ptcl_py.p_dbl[:,7]
 		part['zp'] 	= get_ptcl_py.p_dbl[:,8]
 		part['id'] 	= get_ptcl_py.p_lnt[:,0]
-		if(self.header.famtype == 'famtype'): part['family'] = get_ptcl_py.p_lnt[:,1]
+
+		#if(self.header.famtype == 'new'): part['family'] = get_ptcl_py.p_lnt[:,1]
 
 		get_ptcl_py.get_ptcl_deallocate()
 
-		##
-		if(g_simunit==False):
-			part['xx'] 	*= (info['unit_l'] / info['cgs']['kpc'])
-			part['yy'] 	*= (info['unit_l'] / info['cgs']['kpc'])
-			part['zz'] 	*= (info['unit_l'] / info['cgs']['kpc'])
-			part['vx'] 	*= (info['kms'])
-			part['vy'] 	*= (info['kms'])
-			part['vz'] 	*= (info['kms'])
-			part['mp']	*= (info['unit_m'] / info['cgs']['m_sun'])
+		
 
 		if(g_ptime==True):
 			ptime = self.g_ptime(n_snap, part['ap'])

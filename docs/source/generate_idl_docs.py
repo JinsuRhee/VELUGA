@@ -69,7 +69,7 @@ def create_dummy_python_script(function_docs, output_file):
 
 def main():
     idl_file = '../../veluga__define.pro'
-    target_function = ['r_gal']
+    target_function = ['r_gal', 'r_part']
     module_name = 'idl_dummy'
 
 

@@ -27,13 +27,17 @@ class veluga:
         
         Examples
         --------
-        IDL> g = veluga->r_gal(100, 1)	; Read the galaxy with ID=1 at the snapshot of 100
+        IDL> g = veluga->r_gal(100, 1)
+        		Read the galaxy with ID=1 at the snapshot of 100
         
-        IDL> PRINT, g[0].ID 				; Print its ID
+        IDL> PRINT, g[0].ID
+        		Print its ID
         
-        IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
+        IDL> h = veluga->r_gal(200, -1, horg='h')
+        		Read all halos at the snapshot of 200
         
-        IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
+        IDL> PRINT, h[0].mvir
+        		Print the virial mass of the first halo
 
         """
         pass

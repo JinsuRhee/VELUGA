@@ -167,13 +167,17 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	;
 	; Examples
 	; --------
-	; IDL> g = veluga->r_gal(100, 1)	; Read the galaxy with ID=1 at the snapshot of 100
+	; IDL> g = veluga->r_gal(100, 1)
+	; 		Read the galaxy with ID=1 at the snapshot of 100
 	;
-	; IDL> PRINT, g[0].ID 				; Print its ID
+	; IDL> PRINT, g[0].ID
+	; 		Print its ID
 	;
-	; IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
+	; IDL> h = veluga->r_gal(200, -1, horg='h')
+	; 		Read all halos at the snapshot of 200
 	;
-	; IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
+	; IDL> PRINT, h[0].mvir
+	; 		Print the virial mass of the first halo
 	;+
 
 	;;-----
@@ -331,11 +335,82 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	RETURN, GP
 END
 
-FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
+FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_ptime
+	;+
+	; Load Member Particle of a given Galaxy/Halo Data.
+	; This method retrieves particle information of a given galaxy or halo
+	; 
+	; Parameters
+	; ----------
+	; snap0 : int
+	; 	Snapshot number
+	;
+	; id0 : int
+	; 	Object ID.
+	;
+	; horg: string {'h' or 'g'}
+	; 	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+	; 	Default is 'g'
+	;
+	; g_simunit: boolean
+	; 	If set (/g_simunit), return output unit as the ramses simulation unit
+	;
+	; g_ptime: boolean
+	; 	If set (/g_ptime), retrieve physical time unit for the age of particles
+	; 	Stored in gyr, sfact, and redsh tag
+	;
+	; Outputs
+	; -------
+	; xx, yy, zz : position [kpc (physical)]
+	; vx, vy, vz : velocity [km/s]
+	; mp : mass [Msun]
+	; ap : birth time [simulation unit]
+	; zp : metallicitiy
+	; gyr : birth time in Gyr
+	; 		retrieved if /g_ptime
+	; sfact: birth time in scale factor
+	; 		retrieved if /g_ptime
+	; redsh: birth time in redshfit
+	; 		retrieved if /g_ptime
+	; id : Particle ID
+	; domain : mpi domain number to which particles belong
+	; KE : specific Kinetic energy [km^2/s^2]
+	; 		retrieved when g_potential ftn is called
+	; UE : specific Internal energy [km^2/s^2]
+	; 		retrieved when g_potential ftn is called
+	; PE : specific Potential energy [km^2/s^2]
+	; 		retrieved when g_potential ftn is called
+	;
+	; Returns
+	; -------
+	; Structure
+	; 	A structure containing information about member particles.
+	;
+	; Examples
+	; --------
+	; IDL> g = veluga->r_part(100, 1)
+	; 		Retrieve information of the member star particle of the galaxy with ID=1 at the snapshot of 100
+	;
+	; IDL> PRINT, g[0].ID
+	; 		Print ID of the first particle
+	;
+	; IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+	; 		Retrieve information of the member star particles (including their birth time properties) that belong to the galaxy with ID=10 at the snapshot of 100
+	;
+	; IDL> h = veluga->r_gal(200, 5, horg='h')
+	; 		Retrieve information of the member DM particle of the halo with ID=5 and snapshot=200
+	;
+	; IDL> ; extract particles with an index
+	;
+	; IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+	; IDL> index = WHERE(g.gyr LT 1.)
+	; IDL> g_new = veluga->g_extract(g, index)
+	;		Return a new structure with a given index
+	;+
+
 
 	;;-----
 	;; READ MEMBER Part
-	;;	/simout 	- output as the simulation raw unit
 	;;-----
 	IF ~KEYWORD_SET(horg) THEN horg='g'
 	settings 	= self->getheader()
@@ -399,7 +474,7 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 
 	output.id 	= pid(cut)
 
-	IF ~KEYWORD_SET(simout) THEN BEGIN
+	IF ~KEYWORD_SET(g_simunit) THEN BEGIN
 		output.xx 	*= (info.unit_l/info.cgs.kpc)
 		output.yy 	*= (info.unit_l/info.cgs.kpc)
 		output.zz 	*= (info.unit_l/info.cgs.kpc)
@@ -411,6 +486,13 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 		output.mp 	*= (info.unit_m / info.cgs.m_sun)
 	ENDIF
 
+	IF KEYWORD_SET(g_ptime) THEN BEGIN
+		agearr 	= self->g_gyr(snap0, output.ap)
+
+		output.gyr 		= agearr.gyr
+		output.sfact 	= agearr.sfact
+		output.redsh 	= agearr.redsh
+	ENDIF
 	RETURN, output
 END
 
@@ -932,7 +1014,7 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	ENDELSE
 END
 
-FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout, ptime=ptime
 
 	;;-----
 	;; Read Particle within a sphere
@@ -1037,6 +1119,15 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part.domain = dl
 	part.id 	= id
 
+	
+	IF KEYWORD_SET(ptime) THEN BEGIN
+		agearr 	= self->g_gyr(snao0, output.ap)
+
+		output.gyr 		= agearr.gyr
+		output.sfact 	= agearr.sfact
+		output.redsh 	= agearr.redsh
+	ENDIF
+	
 	TOC, elapsed_time=elt2
 
     PRINT, elt1, ' - totnum ', elt2, ' - read all'

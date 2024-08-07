@@ -22,7 +22,7 @@ idtype		= 'long'	;; 'long' or 'long64'
 famtype		= 'new'		;; 'old' or 'new'
 neff		= 4096		;; for zoom-in simulation, starting level
 ndomain		= 480		;; Number of domains of a RAMSES output
-lastsnap	= 811L		;; Last snapshot number
+lastsnap	= 811		;; Last snapshot number
 
 skiprd_domain	= -1	;; skip reading domain in particle data
 skiprd_time 	= -1	;; skip reading time in particle data
@@ -36,8 +36,8 @@ hydro_variables = ['den', 'vx', 'vy', 'vz', 'temp', 'zp', 'skip']
 pp_snap	= [100, 100, 1]	;; snapshot range [snap_i, snap_f, dsnap]
 pp_runtype 	= {load_catalog:1, read_ptclid:1, member_match:1, compute_bulk:1, save:2};; 2 force run // 1 mild run // 0 skip
 
-pp_saveprocess	= 1 		;; 0L no save // 1L save
-pp_clump_mfrac	= 0.5d		;; Mass fraction for identifying newly formed clumps
+pp_saveprocess	= 1 		;; 0 no save // 1 save
+pp_clump_mfrac	= 0.5		;; Mass fraction for identifying newly formed clumps
 
 ##-----
 ## Branch Generating related
@@ -50,9 +50,9 @@ makebr_bidkey		= 10000
 ##-----
 ## CTree (Complete Tree) related
 ##-----
-ctree_snap	= [30L, 811L]
-ctree_rfact	= 10.d		;; Find Candidate galaxies within a sphere of a radius of speed * rfact * dT (10 seems good)
-ctree_meritlimit	= 0.001d	;; Merit limit to end a branch
-ctree_n_step_N		= 10L		;; number of branch points (>10) when collecting particles on a existing branch
-ctree_n_step_dN		= 10L		;; dN between the points (corresponding to 200 MYr seems good)
-ctree_n_search		= 20L		;; number of snapshots to be searched simultaneously
+ctree_snap	= [30, 811]
+ctree_rfact	= 10.		;; Find Candidate galaxies within a sphere of a radius of speed * rfact * dT (10 seems good)
+ctree_meritlimit	= 0.001		;; Merit limit to end a branch
+ctree_n_step_N		= 10		;; number of branch points (>10) when collecting particles on a existing branch
+ctree_n_step_dN		= 10		;; dN between the points (corresponding to 200 MYr seems good)
+ctree_n_search		= 10		;; number of snapshots to be searched simultaneously
