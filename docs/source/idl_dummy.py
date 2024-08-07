@@ -42,3 +42,77 @@ class veluga:
         """
         pass
 
+    def r_part():
+        """
+        This method retrieves particle information of a given galaxy or halo
+        
+        Parameters
+        ----------
+        snap0 : int
+        	Snapshot number
+        
+        id0 : int
+        	Object ID.
+        
+        horg: string {'h' or 'g'}
+        	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+        	Default is 'g'
+        
+        g_simunit: boolean
+        	If set (/g_simunit), return output unit as the ramses simulation unit
+        
+        g_ptime: boolean
+        	If set (/g_ptime), retrieve physical time unit for the age of particles
+        	Stored in gyr, sfact, and redsh tag
+        
+        Outputs
+        -------
+        xx, yy, zz : position [kpc (physical)]
+        vx, vy, vz : velocity [km/s]
+        mp : mass [Msun]
+        ap : birth time [simulation unit]
+        zp : metallicitiy
+        gyr : birth time in Gyr
+        		retrieved if /g_ptime
+        sfact: birth time in scale factor
+        		retrieved if /g_ptime
+        redsh: birth time in redshfit
+        		retrieved if /g_ptime
+        id : Particle ID
+        domain : mpi domain number to which particles belong
+        KE : specific Kinetic energy [km^2/s^2]
+        		retrieved when g_potential ftn is called
+        UE : specific Internal energy [km^2/s^2]
+        		retrieved when g_potential ftn is called
+        PE : specific Potential energy [km^2/s^2]
+        		retrieved when g_potential ftn is called
+        
+        Returns
+        -------
+        Structure
+        	A structure containing information about member particles.
+        
+        Examples
+        --------
+        IDL> g = veluga->r_part(100, 1)
+        		Retrieve information of the member star particle of the galaxy with ID=1 at the snapshot of 100
+        
+        IDL> PRINT, g[0].ID
+        		Print ID of the first particle
+        
+        IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+        		Retrieve information of the member star particles (including their birth time properties) that belong to the galaxy with ID=10 at the snapshot of 100
+        
+        IDL> h = veluga->r_gal(200, 5, horg='h')
+        		Retrieve information of the member DM particle of the halo with ID=5 and snapshot=200
+        
+        IDL> ; extract particles with an index
+        
+        IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+        IDL> index = WHERE(g.gyr LT 1.)
+        IDL> g_new = veluga->g_extract(g, index)
+        	Return a new structure with a given index
+
+        """
+        pass
+
