@@ -65,32 +65,39 @@ class veluga:
         	If set (/g_ptime), retrieve physical time unit for the age of particles
         	Stored in gyr, sfact, and redsh tag
         
-        Outputs
-        -------
-        xx, yy, zz : position [kpc (physical)]
-        vx, vy, vz : velocity [km/s]
-        mp : mass [Msun]
-        ap : birth time [simulation unit]
-        zp : metallicitiy
-        gyr : birth time in Gyr
-        		retrieved if /g_ptime
-        sfact: birth time in scale factor
-        		retrieved if /g_ptime
-        redsh: birth time in redshfit
-        		retrieved if /g_ptime
-        id : Particle ID
-        domain : mpi domain number to which particles belong
-        KE : specific Kinetic energy [km^2/s^2]
-        		retrieved when g_potential ftn is called
-        UE : specific Internal energy [km^2/s^2]
-        		retrieved when g_potential ftn is called
-        PE : specific Potential energy [km^2/s^2]
-        		retrieved when g_potential ftn is called
         
         Returns
         -------
         Structure
-        	A structure containing information about member particles.
+        	xx, yy, zz : [kpc (physical)]
+        		position of particles
+        	vx, vy, vz : [km/s]
+        		velocity of particles
+        	mp : [Msun]
+        		mass of particles
+        	ap : [simulation unit]
+        		birth time
+        	zp : []
+        		metallicitiy
+        	gyr : [Gyr]
+        		birth time in Gyr (retrieved if g_ptime=True)
+        	sfact: []
+        		birth time in scale factor (retrieved if g_ptime=True)
+        	redsh: []
+        		birth time in redshift (retrieved if g_ptime=True)
+        	id : []
+        		Particle ID
+        	domain : []
+        		mpi domain number to which particles belong
+        	KE : [km^2/s^2]
+        		specific Kinetic energy
+        		retrieved when g_potential is called (Not implemented yet)
+        	UE : [km^2/s^2]
+        		specific Internal energy
+        		retrieved when g_potential is called (Not implemented yet)
+        	PE : [km^2/s^2]
+        		specific Potential energy
+        		retrieved when g_potential is called (Not implemented yet)
         
         Examples
         --------
