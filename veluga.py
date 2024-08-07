@@ -946,24 +946,34 @@ class veluga:
 		Returns
 		-------
 		numpy array
-			xx, yy, zz : position [kpc (physical)]
-			vx, vy, vz : velocity [km/s]
-			mp : mass [Msun]
-			ap : birth time [simulation unit]
-			zp : metallicitiy
-			gyr : birth time in Gyr
-				retrieved if g_ptime=True
-			sfact: birth time in scale factor
-				retrieved if g_ptime=True
-			redsh: birth time in redshfit
-				retrieved if g_ptime=True
-			id : Particle ID
-			domain : mpi domain number to which particles belong
-			KE : specific Kinetic energy [km^2/s^2]
+			xx, yy, zz : [kpc (physical)]
+				position of particles
+			vx, vy, vz : [km/s]
+				velocity of particles
+			mp : [Msun]
+				mass of particles
+			ap : [simulation unit]
+				birth time
+			zp : []
+				metallicitiy
+			gyr : [Gyr]
+				birth time in Gyr (retrieved if g_ptime=True)
+			sfact: []
+				birth time in scale factor (retrieved if g_ptime=True)
+			redsh: []
+				birth time in redshift (retrieved if g_ptime=True)
+			id : []
+				Particle ID
+			domain : []
+				mpi domain number to which particles belong
+			KE : [km^2/s^2]
+				specific Kinetic energy
 				retrieved when g_potential is called (Not implemented yet)
-			UE : specific Internal energy [km^2/s^2]
+			UE : [km^2/s^2]
+				specific Internal energy
 				retrieved when g_potential is called (Not implemented yet)
-			PE : specific Potential energy [km^2/s^2]
+			PE : [km^2/s^2]
+				specific Potential energy
 				retrieved when g_potential is called (Not implemented yet)
 
 
