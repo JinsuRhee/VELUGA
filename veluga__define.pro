@@ -1,4 +1,4 @@
-FUNCTION veluga::init, fname, num_thread=num_thread
+FUNCTION veluga::init, fname, num_thread=num_thread, skiplogo=skiplogo
 
 	IF ~KEYWORD_SET(num_thread) THEN num_thread = 1L
 
@@ -11,6 +11,20 @@ FUNCTION veluga::init, fname, num_thread=num_thread
 	self.tree 	= PTR_NEW(ptr)
 	
 	settings 	= self.getheader()
+
+
+	;;----- READ LOGO
+	IF ~KEYWORD_SET(skiplogo) THEN BEGIN
+		fname 	= 'docs/veluga_logo.txt'
+		OPENR, 10, fname
+		FOR i=0L, FILE_LINES(fname)-1L DO BEGIN
+			dum = ''
+			READF, 10, dum
+			PRINT, dum
+		ENDFOR
+		CLOSE, 10
+	ENDIF
+
 
 	RETURN, 1
 END

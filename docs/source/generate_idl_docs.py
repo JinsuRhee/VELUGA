@@ -13,6 +13,7 @@ def extract_comments_from_idl(idl_file, target_functions):
                 # Extract the function name
                 current_function = line.split("FUNCTION veluga::")[1].strip().split(",")[0]
                 # Reset the current comment if the function is one of the targets
+                #print(current_function)
                 if current_function in target_functions:
                     current_comment = []
                 else:
@@ -22,6 +23,7 @@ def extract_comments_from_idl(idl_file, target_functions):
                 # Extract the function name
                 current_function = line.split("PRO veluga::")[1].strip().split(",")[0]
                 # Reset the current comment if the function is one of the targets
+                #print(current_function)
                 if current_function in target_functions:
                     current_comment = []
                 else:

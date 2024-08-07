@@ -24,7 +24,7 @@ from src.fortran.find_domain_py import find_domain_py
 
 class veluga:
 
-	def __init__(self, header, num_thread=1):
+	def __init__(self, header, num_thread=1, skiplogo=False):
 
 		##-----
 		## INIT Setting
@@ -32,8 +32,15 @@ class veluga:
 		self.sun_met 	= 0.02
 		self.num_thread = int(num_thread)
 		self.r_gal_tname = None
-
+		self.root_path = os.path.dirname(os.path.abspath(__file__))
 		void 	= self.rdheader(header)
+
+		
+		if skiplogo == False:
+			fname = self.root_path + '/docs/veluga_logo.txt'
+			with open(fname, 'r', encoding='utf-8') as file:
+				for line in file:
+					print(line)
 
 ##-----
 ## SIMPLE FTNS
