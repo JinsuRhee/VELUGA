@@ -40,7 +40,7 @@ class veluga:
 			fname = self.root_path + '/docs/veluga_logo.txt'
 			with open(fname, 'r', encoding='utf-8') as file:
 				for line in file:
-					print(line)
+					print(line, end="")
 
 ##-----
 ## SIMPLE FTNS
