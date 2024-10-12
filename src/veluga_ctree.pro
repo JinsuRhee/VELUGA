@@ -36,7 +36,23 @@ FUNCTION veluga_ctree_reallocate, data, nn
 
 	data2	= REPLICATE(data(0), nn)
 	data2(0L:N_ELEMENTS(data)-1L) 	= data
-	data 	= 0.d
+	
+    data2(N_ELEMENTS(data):-1L).id0   = 0L
+    data2(N_ELEMENTS(data):-1L).id    = 0L
+    data2(N_ELEMENTS(data):-1L).snap  = -1L
+    data2(N_ELEMENTS(data):-1L).snap0 = -1L
+
+
+
+    data2(N_ELEMENTS(data):-1L).pos   = -1.d
+    data2(N_ELEMENTS(data):-1L).vel   = -1.d
+    data2(N_ELEMENTS(data):-1L).detstat  = -1L
+
+    data2(N_ELEMENTS(data):-1L).n_ptcl   = -1L
+    data2(N_ELEMENTS(data):-1L).list_n    = -1L
+
+    data2(N_ELEMENTS(data):-1L).p_list  = PTR_NEW(1.d)
+    data    = 0.d
 	RETURN, data2
 END
 ;;-----
@@ -51,8 +67,8 @@ PRO veluga_ctree_intputgal, settings, complete_tree, tree_key, data, gal, i0, i1
 		STOP
 	ENDIF
 
-	IF i1 GT N_ELEMENTS(data)-1L THEN data = veluga_ctree_reallocate(data, i1 + N_ELEMENTS(gal))
-	
+	IF i1 GT N_ELEMENTS(data)-1L THEN data = veluga_ctree_reallocate(data, N_ELEMENTS(data) + N_ELEMENTS(gal))
+
 	data(i0:i1).id0 	= gal.id
 	data(i0:i1).snap0 	= gal.snapnum
 	FOR i=0L, N_ELEMENTS(gal)-1L DO BEGIN
@@ -61,11 +77,15 @@ PRO veluga_ctree_intputgal, settings, complete_tree, tree_key, data, gal, i0, i1
 		IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
 			data(i0+i).snap 	= gal(i).snapnum
 			data(i0+i).id 		= gal(i).id
+
+            veluga_ctree_makenewbr, gal(i).snapnum, gal(i).id, complete_tree, tree_key
 		ENDIF ELSE BEGIN
 			data(i0+i).snap 	= tree.snap(0)
 			data(i0+i).id 		= tree.id(0)
 		ENDELSE
 	ENDFOR
+
+
 END
 
 ;;-----
@@ -110,11 +130,17 @@ END
 ;;-----
 PRO veluga_ctree_classify, settings, data, snap0, number
 
-	slist 	= settings.slist
+    slist   = settings.slist
 
 	number 	= {T:0L, C:0L, B:0L}
 	ind0    = (WHERE(slist EQ snap0))[0]
 	FOR i=0L, N_ELEMENTS(data)-1L DO BEGIN
+
+        IF data(i).ID0 LE 0L THEN BEGIN
+            data(i).stat    = 'N'
+            CONTINUE
+        ENDIF
+
 		;; Tree exists
 
 		IF data(i).snap LE snap0 THEN BEGIN
@@ -293,6 +319,7 @@ FUNCTION veluga_ctree_collectpid, settings, data, complete_tree, tree_key
                 pweight0= cpid.weight
             ENDELSE
 
+
 			;;----- STORE PARTICLE TO THIS BRANCH ARRAY
 			data(ind).n_ptcl        = N_ELEMENTS(pid0)
             data(ind).p_list        = PTR_NEW(pid0, /no_copy)
@@ -363,7 +390,10 @@ FUNCTION veluga_ctree_readsnap, settings, data, snap0
         speed   = NORM(vel) / (kpc/1d5) * (365.d * 86400d * 1e9)        ;; [kpc/Gyr]
         rad(i)  = speed * settings.ctree_rfact * $
         	ABS(sinfo(snap0).age - sinfo(data(ind).snap).age) * kpc / unit_l
+
+        
     ENDFOR
+
 
     gal 	= veluga->r_gal(snap0, -1L, horg=settings.horg, GProp=['ID', 'npart', 'Xc', 'Yc', 'Zc'])
 
@@ -383,7 +413,8 @@ FUNCTION veluga_ctree_readsnap, settings, data, snap0
         pos     = [gal(i).xc, gal(i).yc, gal(i).zc] * kpc / unit_l
         d3d     = veluga->g_d3d(cen(*,0), cen(*,1), cen(*,2), pos) / rad
 
-        IF MIN(d3d) GT 1. THEN CONTINUE
+        ;IF MIN(d3d) GT 1. THEN CONTINUE
+        IF MIN(d3d) GT 3. THEN CONTINUE
         checkind(i)     = 1L
 
         pid0    = veluga->r_pid(snap0, gal(i).id, horg=settings.horg)
@@ -514,51 +545,149 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
 	ind1    = (WHERE(slist0 EQ c_snap))[0]
     ind0    = (WHERE(slist0 EQ settings.ctree_snap(0)))[0]
     snap_int_cut    = MIN([ind1-ind0-1L, settings.ctree_n_search])
-    cut     = WHERE(data.stat EQ 'C' AND data.list_n GE snap_int_cut AND data.list_n GT 0L, ncut)
+
+
+
+    ;;----- Extract Target
+    cut     = WHERE($
+            (data.stat EQ 'C' $ ;; galaxies to be connected
+            AND data.list_n GE snap_int_cut $ ;; if they have enough number of searches
+            AND data.list_n GT 0L) $ ;; if their particles are collected
+            , ncut)
+
     IF ncut EQ 0L THEN RETURN
+    ;;----- Extract next points
+    next_point  = REPLICATE({merit:0.d, id:0L, snap:0L}, ncut)
 
     FOR i=0L, ncut-1L DO BEGIN
         ind     = cut(i)
         mlist   = data(ind).list.merit
         idlist  = data(ind).list.id
         slist   = data(ind).list.snap
-        IF MAX(mlist) LT settings.ctree_meritlimit THEN BEGIN
-            data(ind).stat = 'B'
-            veluga_ctree_free, data, ind, -1L, -1L, c_snap
+    
+        cut2    = (WHERE(mlist EQ MAX(mlist)))[0]
+    
+        next_point(i).id        = idlist(cut2)
+        next_point(i).snap      = slist(cut2)
+        next_point(i).merit     = MAX(mlist)
+    ENDFOR
+
+
+    ;;----- Check Connectivity
+
+    ;; Gathering all checkpoints
+    data_ind    = WHERE(data.list_n GE 1L, nind1)
+    data2       = data(data_ind)
+
+    nall        = TOTAL(data2.list_n)
+    checkarr    = REPLICATE({merit:0.d, id:0L, snap:0L, id0:0L, snap0:0L}, nall)
+
+    i0  = 0L
+    FOR i=0L, N_ELEMENTS(data2)-1L DO BEGIN
+        i1  = i0 + data2(i).list_n-1L
+
+        checkarr(i0:i1).merit   = data2(i).list(0L:data2(i).list_n-1L).merit
+        checkarr(i0:i1).id      = data2(i).list(0L:data2(i).list_n-1L).id
+        checkarr(i0:i1).snap    = data2(i).list(0L:data2(i).list_n-1L).snap
+        checkarr(i0:i1).id0     = data2(i).id0
+        checkarr(i0:i1).snap0   = data2(i).snap0
+
+        i0  = i1 + 1L
+    ENDFOR
+
+
+    islink  = LONARR(ncut) + 1L
+    FOR i=0L, ncut-1L DO BEGIN
+        ind     = cut(i)
+        IF next_point(i).merit LT settings.ctree_meritlimit THEN BEGIN
+            islink(i) = -1L
             CONTINUE
         ENDIF
-        
-        cut2    = (WHERE(mlist EQ MAX(mlist)))[0]
 
-        id_tolink       = idlist(cut2)
-        snap_tolink     = slist(cut2)
-        merit_tolink    = MAX(mlist)
-        
-        ;; Check Whether there is tree existed
-        kval    = snap_tolink + tree_key(0)*id_tolink
-        tind    = tree_key(kval)
+        ischeck     = WHERE(checkarr.snap EQ next_point(i).snap AND checkarr.id EQ next_point(i).id, nischeck)
 
-        IF tind EQ -1L THEN BEGIN       ;; notree
-            veluga_ctree_expandbr, data, ind, complete_tree, tree_key, id_tolink, snap_tolink, merit_tolink
+        IF nischeck EQ 0L THEN BEGIN
+            islink(i) = -1L ;; No further link (all list have low merit)
+        ENDIF 
 
-            IF data(ind).stat EQ 'B' THEN BEGIN
-                veluga_ctree_free, data, ind, -1L, -1L, c_snap
-            ENDIF ELSE BEGIN
-                veluga_ctree_free, data, ind, snap_tolink, id_tolink, c_snap
-			ENDELSE
-        ENDIF ELSE BEGIN                ;; Tree exist
-            veluga_ctree_linkbr, settings, data, ind, complete_tree, tree_key, id_tolink, snap_tolink, merit_tolink, c_snap
+        IF nischeck GE 2L THEN BEGIN ;; checkpoint is overlapped
+            this_merit  = next_point(i).merit
 
-            IF data(ind).stat EQ 'B' THEN BEGIN
-                veluga_ctree_free, data, ind, -1L, -1L, c_snap
-            ENDIF ELSE BEGIN
-                tkey    = snap_tolink + tree_key(0)*id_tolink
-                tind2   = tree_key(kval)
-                tdum    = *complete_tree(tind2)
-                veluga_ctree_free, data, ind, tdum.snap(0), tdum.id(0), c_snap
-            ENDELSE
-        ENDELSE
+            com_merit   = checkarr(ischeck).merit
+            com_id0     = checkarr(ischeck).id0
+            com_snap0   = checkarr(ischeck).snap0
+
+            com_ext     = WHERE(com_id0 NE data(i).id0 OR com_snap0  NE data(i).snap0)
+            com_merit   = MAX(com_merit(com_ext))
+
+            IF this_merit LT com_merit THEN BEGIN
+                islink(i) = -1L
+                CONTINUE
+            ENDIF
+        ENDIF
     ENDFOR
+
+    ;;----- Close data for islink < 0
+    isclose     = WHERE(islink LT 0L, nclose)
+    IF nclose GE 1L THEN BEGIN
+        cut2     = cut(isclose)
+
+        FOR i=0L, nclose-1L DO BEGIN
+            ind     = cut2(i)
+            data(ind).stat  = 'B'
+            veluga_ctree_free, data, ind, -1L, -1L, c_snap
+        ENDFOR
+    ENDIF
+
+
+    ;;----- Link to a next checkpoint
+    isnext  = WHERE(islink GT 0L, nnext)
+    IF nnext GE 1L THEN BEGIN
+        cut2        = cut(isnext)
+        next_point  = next_point(isnext)
+
+        FOR i=0L, nnext-1L DO BEGIN
+            ind     = cut2(i)
+
+            snap_tolink     = next_point(i).snap
+            id_tolink       = next_point(i).id
+            merit_tolink    = next_point(i).merit
+    
+            
+            
+            ;; Check Whether there is tree existed
+            kval    = snap_tolink + tree_key(0)*id_tolink
+            tind    = tree_key(kval)
+   
+            IF tind EQ -1L THEN BEGIN       ;; notree
+                veluga_ctree_expandbr, data, ind, complete_tree, tree_key, id_tolink, snap_tolink, merit_tolink
+                
+    
+                IF data(ind).stat EQ 'B' THEN BEGIN
+                    STOP
+                    veluga_ctree_free, data, ind, -1L, -1L, c_snap
+                ENDIF ELSE BEGIN
+                    veluga_ctree_free, data, ind, snap_tolink, id_tolink, c_snap
+    			ENDELSE
+            ENDIF ELSE BEGIN                ;; Tree exist
+    
+                veluga_ctree_linkbr, settings, data, ind, complete_tree, tree_key, id_tolink, snap_tolink, merit_tolink, c_snap
+    
+                IF data(ind).stat EQ 'B' THEN BEGIN
+                    veluga_ctree_free, data, ind, -1L, -1L, c_snap
+                ENDIF ELSE BEGIN
+                    tkey    = snap_tolink + tree_key(0)*id_tolink
+                    tind2   = tree_key(kval)
+                    tdum    = *complete_tree(tind2)
+                    veluga_ctree_free, data, ind, tdum.snap(0), tdum.id(0), c_snap
+                ENDELSE
+            ENDELSE
+        ENDFOR
+    ENDIF
+
+    RETURN
+
+
 END
 ;;-----
 ;; BRANCH COMPARE
@@ -604,6 +733,7 @@ PRO veluga_ctree_linkbr, settings, data, ind, complete_tree, tree_key, idc, snap
     tind    = tree_key(kval)
      
     IF tind LT 0L THEN BEGIN
+        STOP ;;456456 remove here
         veluga_ctree_makenewbr, data(ind).snap, data(ind).id, complete_tree, tree_key
         kval    = data(ind).snap + tree_key(0)*data(ind).id
         tind    = tree_key(kval)
@@ -621,30 +751,41 @@ PRO veluga_ctree_linkbr, settings, data, ind, complete_tree, tree_key, idc, snap
         STOP
     ENDIF
 
-	oldgalind       = -1L
-    IF tmp_tree_toc.snap(-1) EQ tmp_tree.snap(-1) THEN BEGIN
-        brorg_cut       = WHERE(tmp_tree.snap GT snapc + settings.ctree_n_step_dn, nbr_org);[0]
-        brcompare_cut   = WHERE(tmp_tree_toc.snap GT snapc + settings.ctree_n_step_dn, nbr_com);[0]
-        IF nbr_org EQ 0L THEN BEGIN
-            brorg_cut       = WHERE(tmp_tree.snap GT snapc, nbr_org)
-        ENDIF
+	;oldgalind       = -1L
+    ;IF tmp_tree_toc.snap(-1) EQ tmp_tree.snap(-1) THEN BEGIN
 
-        IF nbr_com EQ 0L THEN BEGIN
-            brcompare_cut   = WHERE(tmp_tree_toc.snap GT snapc, nbr_com)
-        ENDIF
-
-        merit_com       = veluga_ctree_brcompare(settings, snapc, idc, tmp_tree_toc.snap(brcompare_cut), tmp_tree_toc.id(brcompare_cut))
-        merit_org       = veluga_ctree_brcompare(settings, snapc, idc, tmp_tree.snap(brorg_cut), tmp_tree.ID(brorg_cut))
-
-        IF merit_com GT merit_org THEN BEGIN    ;; Existing tree is better
-            data(ind).stat = 'B'
-            RETURN
-        ENDIF
-        oldgalind       = WHERE(data.id EQ tmp_tree_toc.id(0) AND data.snap EQ tmp_tree_toc.snap(0), nold)
-        IF nold NE 1L THEN STOP
+    ;;----- branch-wise comparison
+    brorg_cut       = WHERE(tmp_tree.snap GT snapc + settings.ctree_n_step_dn, nbr_org);[0]
+    brcompare_cut   = WHERE(tmp_tree_toc.snap GT snapc + settings.ctree_n_step_dn, nbr_com);[0]
+    IF nbr_org EQ 0L THEN BEGIN
+        brorg_cut       = WHERE(tmp_tree.snap GT snapc, nbr_org)
     ENDIF
 
-    ;; Leave Old tree
+    IF nbr_com EQ 0L THEN BEGIN
+        brcompare_cut   = WHERE(tmp_tree_toc.snap GT snapc, nbr_com)
+    ENDIF
+
+    merit_com       = veluga_ctree_brcompare(settings, snapc, idc, tmp_tree_toc.snap(brcompare_cut), tmp_tree_toc.id(brcompare_cut))
+    merit_org       = veluga_ctree_brcompare(settings, snapc, idc, tmp_tree.snap(brorg_cut), tmp_tree.ID(brorg_cut))
+
+    IF merit_com GT merit_org THEN BEGIN    ;; Existing tree is better
+        data(ind).stat = 'B'
+        RETURN
+    ENDIF
+    
+    ;oldgalind       = WHERE(data.id EQ tmp_tree_toc.id(0) AND data.snap EQ tmp_tree_toc.snap(0), nold)
+    ;IF nold NE 1L THEN STOP
+    ;ENDIF
+    ;;----- Clear old data
+    oldgalind   = WHERE(data.id0 EQ tmp_tree_toc.id(-1) AND data.snap0 EQ tmp_tree_toc.snap(-1), noldgalind)
+
+    IF noldgalind EQ 0L THEN STOP ;; why no data?
+    IF noldgalind GE 2L THEN STOP ;; why two?
+
+    veluga_ctree_free, data, oldgalind, -1L, -1L, c_snap
+    data(oldgalind).stat    = 'B'
+
+    ;;----- Modify tree from old one
     cut_toc = WHERE(tmp_tree_toc.snap GT snapc, nnn)
     IF nnn GE 1L THEN BEGIN
         cut_toc_merge   = WHERE(tmp_tree_toc.m_snap GT snapc, nmerge)
@@ -680,6 +821,10 @@ PRO veluga_ctree_linkbr, settings, data, ind, complete_tree, tree_key, idc, snap
         old_tree        = -1L
     ENDELSE
 
+
+
+
+    ;;----- Expand new tree
     cut_org = WHERE(tmp_tree.snap GE data(ind).snap, norg)
     IF norg EQ 0L THEN STOP
 
@@ -827,6 +972,7 @@ PRO veluga_ctree_expandbr, data, ind, complete_tree, tree_key, idc, snapc, merit
     tind    = tree_key(kval)
     
     IF tind LT 0L THEN BEGIN
+        STOP ;;456456 remove here
         veluga_ctree_makenewbr, data(ind).snap, data(ind).id, complete_tree, tree_key
         tind    = tree_key(data(ind).snap + tree_key(0)*data(ind).id)
     ENDIF
@@ -872,6 +1018,202 @@ PRO veluga_ctree_expandbr, data, ind, complete_tree, tree_key, idc, snapc, merit
 END
 
 ;;-----
+;; Add New galaxies without tree
+;;-----
+PRO veluga_ctree_addgal, settings, data, c_snap, complete_tree, tree_key
+
+    veluga  = settings.veluga
+
+    ;;----- LOAD GALAXIES AT THIS SNAPSHOT
+    gal     = veluga->r_gal(c_snap, -1L, horg=settings.horg, GProp=['ID'])
+    gal_treeind     = tree_key(c_snap + gal.ID*tree_key(0))
+
+    ;;----- MAKE TREEIND
+    exist_treeind   = tree_key(data.snap0 + data.id0*tree_key(0))
+
+    data_ind    = WHERE(data.list_n GE 1L, nind1)
+    data2       = data(data_ind)
+
+    nall        = TOTAL(data2.list_n)
+    IF nall EQ 0L THEN RETURN
+    checkarr    = REPLICATE({merit:0.d, id:0L, snap:0L}, nall)
+
+    i0  = 0L
+    FOR i=0L, N_ELEMENTS(data2)-1L DO BEGIN
+        i1  = i0 + data2(i).list_n-1L
+
+        checkarr(i0:i1).merit   = data2(i).list(0L:data2(i).list_n-1L).merit
+        checkarr(i0:i1).id      = data2(i).list(0L:data2(i).list_n-1L).id
+        checkarr(i0:i1).snap    = data2(i).list(0L:data2(i).list_n-1L).snap
+
+        i0  = i1 + 1L
+    ENDFOR
+
+    cut     = WHERE(checkarr.snap EQ c_snap, nind2)
+    checkarr    = checkarr(cut)
+
+
+    ;;-----
+    ;; Tree ENDS at this snapshot
+    ;;-----
+
+    tag     = LONARR(N_ELEMENTS(gal)) - 1L
+    FOR i=0L, N_ELEMENTS(gal)-1L DO BEGIN
+        g_tree  = *complete_tree(gal_treeind(i))
+
+        IF gal_treeind(i) LT 0L THEN BEGIN ;; No tree
+            tag(i) = 1L
+            CONTINUE
+        ENDIF
+
+        IF g_tree.snap(-1) EQ c_snap THEN BEGIN ;; Tree ends at this snapshot
+            tag(i) = 2L
+        ENDIF
+    ENDFOR
+
+
+    ;;----- INPUT
+    cut     = WHERE(tag GE 0L, ncut)
+    gal     = gal(cut)
+    IF ncut GE 1L THEN BEGIN
+        ;data2   = veluga_ctree_allocate(settings, complete_tree, tree_key, ncut)
+        ng0     = N_ELEMENTS(data)
+        ng1     = N_ELEMENTS(data) + ncut-1L
+
+        veluga_ctree_intputgal, settings, complete_tree, tree_key, data, gal, ng0, ng1
+    ENDIF
+
+END
+;;-----
+;; TREE FINDER
+;;-----
+PRO veluga_ctree_main, settings, complete_tree, tree_key
+
+    horg    = settings.horg
+    slist   = settings.slist
+    veluga  = settings.veluga
+
+    ;;
+    gal     = veluga->r_gal(MAX(slist), -1L, horg=horg, GProp=['ID'])
+    data    = veluga_ctree_allocate(settings, complete_tree, tree_key, N_ELEMENTS(gal))
+
+    ng0     = 0L
+    ng1     = N_ELEMENTS(gal)-1L
+
+    veluga_ctree_intputgal, settings, complete_tree, tree_key, data, gal, ng0, ng1
+
+    ;;-----
+    ;; MAIN LOOP
+    ;;      TO DO
+    ;;          Merit calculation considering weights
+    ;;-----
+    FOR i=N_ELEMENTS(slist)-1L, 0L, -1L DO BEGIN
+        
+
+        c_snap  = slist(i)
+        PRINT, '%123123-----'
+        PRINT, ''
+        PRINT, '                TREE CONNECTION AT SNAP = ' + STRING(c_snap,format='(I4.4)') + ' ( ' + STRING(N_ELEMENTS(data),format='(I6)') + ' gals )'
+        PRINT, '                -- START FROM = ' + STRING(slist(-1),format='(I4.4)') + ' / ' + STRING(settings.lsnap, format='(I4.4)')
+
+        ;;-----
+        ;; ADD GALAXIES WITH NO TREE AT THIS SNAPSHOT
+        ;;-----
+        ;IF i LT N_ELEMENTS(settings.slist)-2L THEN BEGIN
+        ;    TIC
+        ;    veluga_ctree_addgal, settings, data, c_snap, complete_tree, tree_key
+        ;    TOC, elapsed_time=t_addgal
+        ;ENDIF ELSE BEGIN
+        ;    t_addgal = 0.d
+        ;ENDELSE
+
+        ;;-----
+        ;; CLASSIFY GALAXIES WITH BROKEN TREES
+        ;;-----
+        TIC
+        veluga_ctree_classify, settings, data, c_snap, number
+        TOC, elapsed_time=t_classify
+        IF number.T EQ N_ELEMENTS(data) THEN BEGIN
+            PRINT, '                        SKIP due to all galaxies having trees'
+            CONTINUE
+        ENDIF
+
+        ;;-----
+        ;; Determine End point
+        ;;-----
+        ;TIC
+        ;veluga_ctree_detend, settings, data, complete_tree, tree_key
+        ;TOC, elapsed_time=t_detend
+
+        ;;-----
+        ;; Collect particles of galaxies for their merit to be computed
+        ;;-----
+        TIC
+        pid     = veluga_ctree_collectpid(settings, data, complete_tree, tree_key)
+        TOC, elapsed_time=t_cpid
+
+        ;;-----
+        ;; Read particles at this snapshot
+        ;;-----
+        TIC
+        pid0    = veluga_ctree_readsnap(settings, data, c_snap)
+        TOC, elapsed_time=t_rsnap
+
+        ;;-----
+        ;; Merit Calcultion
+        ;;-----
+
+        TIC
+        veluga_ctree_commerit, settings, data, pid, pid0, c_snap
+        TOC, elapsed_time=t_merit
+
+        ;;-----
+        ;; LINK TREE
+        ;;-----
+        TIC
+        veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
+        TOC, elapsed_time=t_link
+
+
+        ;;-----
+        ;; TODO
+        ;;-----
+
+        ; If tree is connected or renewed, set detstat to be -1
+        ;               free p_list and set n_ptcl to be negative
+        ;               free list and list_n
+
+        PRINT, '                Time report [sec]'
+        ;PRINT, '                        Add New Galaxies :', t_addgal
+        PRINT, '                        Classify Galaxies :', t_classify
+        ;PRINT, '                        Det- Branch End   :', t_detend
+        PRINT, '                        Collect PID       :', t_cpid
+        PRINT, '                        Read Snap ptcls   :', t_rsnap
+        PRINT, '                        Compute Merits    :', t_merit
+        PRINT, '                        Link Branch       :', t_link
+
+        IF i MOD 5L EQ 0L THEN $
+            SAVE, FILENAME=settings.dir_tree + '/tfout/ctree_' + STRING(c_snap,format='(I4.4)') + '.sav', settings, data, c_snap, complete_tree, tree_key
+
+        IF c_snap LE settings.ctree_snap(0) THEN BEGIN
+            veluga_ctree_classify, settings, data, c_snap, number
+            veluga_ctree_detend, settings, data, complete_tree, tree_key
+            REPEAT BEGIN
+                veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
+                veluga_ctree_classify, settings, data, c_snap, number
+                veluga_ctree_detend, settings, data, complete_tree, tree_key
+
+            ENDREP UNTIL MAX(data.list_n) EQ 0L
+            BREAK
+        ENDIF
+    ENDFOR
+
+    ;;----- FREE MEMEORY
+    FOR i=0L, N_ELEMENTS(data)-1L DO BEGIN
+        PTR_FREE, data(i).p_list
+    ENDFOR
+END
+;;-----
 ;; MAIN
 ;;	Complete tree corrector made by Jinsu Rhee
 ;;-----
@@ -898,8 +1240,7 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 	snapdata 	= veluga_ctree_getsnapinfo(settings, veluga)
 
 
-	settings	= CREATE_STRUCT(settings, 'veluga', veluga, 'sinfo', snapdata.sinfo, 'slist', snapdata.slist)
-	
+	settings	= CREATE_STRUCT(settings, 'veluga', veluga, 'sinfo', snapdata.sinfo, 'lsnap', snapdata.slist(-1), 'slist', snapdata.slist)
 	;;-----
 	;; LOAD the original tree
 	;;-----
@@ -908,6 +1249,19 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 	;;-----
 	;; ALLOCATE
 	;;-----
+
+;    FOR i=N_ELEMENTS(snapdata.slist)-1L, 0L, -1L DO BEGIN
+;        settings2    = CREATE_STRUCT(settings, 'slist', snapdata.slist(0L:i))
+;
+;        IF i EQ N_ELEMENTS(snapdata.slist)-1L THEN BEGIN
+;            RESTORE, settings.dir_tree + '/tfout/ctree.sav'
+;        ENDIF ELSE BEGIN
+;            veluga_ctree_main, settings2, complete_tree, tree_key
+;        ENDELSE
+;
+;    ENDFOR
+;STOP    
+;;;;;
 	gal 	= veluga->r_gal(MAX(settings.ctree_snap), -1L, horg=horg, GProp=['ID'])
 	data 	= veluga_ctree_allocate(settings, complete_tree, tree_key, N_ELEMENTS(gal))
 
@@ -927,6 +1281,11 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 		
 
 		c_snap 	= settings.slist(i)
+;IF c_snap GE 50L THEN CONTINUE ;;123123
+;IF c_snap EQ 49L THEN $
+    ;RESTORE, '/storage6/jinsu/var/ct_0050.sav'
+
+
 		PRINT, '%123123-----'
         PRINT, ''
         PRINT, '                TREE CONNECTION AT SNAP = ' + STRING(c_snap,format='(I4.4)') + ' ( ' + STRING(N_ELEMENTS(data),format='(I6)') + ' gals )'
@@ -946,9 +1305,9 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
         ;;-----
         ;; Determine End point
         ;;-----
-        TIC
-        veluga_ctree_detend, settings, data, complete_tree, tree_key
-       	TOC, elapsed_time=t_detend
+        ;TIC
+        ;veluga_ctree_detend, settings, data, complete_tree, tree_key
+       	;TOC, elapsed_time=t_detend
 
        	;;-----
        	;; Collect particles of galaxies for their merit to be computed
@@ -967,6 +1326,7 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
         ;;-----
         ;; Merit Calcultion
         ;;-----
+
         TIC
         veluga_ctree_commerit, settings, data, pid, pid0, c_snap
         TOC, elapsed_time=t_merit
@@ -980,16 +1340,20 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 
 
         ;;-----
-        ;; TODO
+        ;; ADD GALAXIES IF THERE ARE GALAXIES STARTING FROM THIS SNAPSHOT
         ;;-----
-
+        TIC
+        veluga_ctree_addgal, settings, data, c_snap, complete_tree, tree_key
+        TOC, elapsed_time=t_addgal
+        
         ; If tree is connected or renewed, set detstat to be -1
         ;               free p_list and set n_ptcl to be negative
         ;               free list and list_n
 
         PRINT, '                Time report [sec]'
+        PRINT, '                        Add New Galaxies :', t_addgal
         PRINT, '                        Classify Galaxies :', t_classify
-        PRINT, '                        Det- Branch End   :', t_detend
+        ;PRINT, '                        Det- Branch End   :', t_detend
         PRINT, '                        Collect PID       :', t_cpid
         PRINT, '                        Read Snap ptcls   :', t_rsnap
         PRINT, '                        Compute Merits    :', t_merit
@@ -1009,6 +1373,11 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
             ENDREP UNTIL MAX(data.list_n) EQ 0L
             BREAK
         ENDIF
+
+;IF c_snap MOD 10L EQ 0L THEN SAVE, filename='/storage6/jinsu/var/ct_' + STRING(c_snap,format='(I4.4)') + '.sav', $
+;    data, complete_tree, tree_key
+
+
     ENDFOR
 
     SAVE, filename=settings.dir_tree + '/tfout/ctree.sav', complete_tree, tree_key

@@ -15,7 +15,7 @@ FUNCTION veluga::init, fname, num_thread=num_thread, skiplogo=skiplogo
 
 	;;----- READ LOGO
 	IF ~KEYWORD_SET(skiplogo) THEN BEGIN
-		fname 	= 'docs/veluga_logo.txt'
+		fname 	= settings.dir_lib + '/docs/veluga_logo.txt'
 		OPENR, 10, fname
 		FOR i=0L, FILE_LINES(fname)-1L DO BEGIN
 			dum = ''
@@ -27,6 +27,12 @@ FUNCTION veluga::init, fname, num_thread=num_thread, skiplogo=skiplogo
 
 
 	RETURN, 1
+END
+
+PRO veluga::setthread, nn
+
+	self.num_thread = nn
+
 END
 
 FUNCTION veluga::allocate, nn, type=type
@@ -688,17 +694,33 @@ FUNCTION veluga::r_tree, snap0, id0, horg=horg
 	RETURN, *(*tree.tree)(ind)
 END
 
+FUNCTION veluga::r_treeID, snap0, id0, horg=horg
+
+	IF ~KEYWORD_SET(horg) THEN horg = 'g'
+
+	tree 	= self->r_tree_load(horg=horg)
+
+	key 	= (*tree.key)[0]
+	keyval 	= snap0 + id0*key
+	ind 	= (*tree.key)[keyval]
+
+	RETURN, ind
+END
+
+
 FUNCTION veluga::r_evol, snap0, id0, horg=horg
 
 	;;-----
 	;; READ TREE
 	;;-----
+	IF ~KEYWORD_SET(horg) THEN horg = 'g'
 
+	
 	tree 	= self->r_tree(snap0, id0, horg=horg)
 	
 	IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
 		self->errorout, 'No tree data exists for ' + horg
-		RETURN, 1L
+		RETURN, self->r_gal(snap0, id0, horg=horg)
 	ENDIF
 
 	;;-----
@@ -972,6 +994,13 @@ FUNCTION veluga::g_info, snap0
 	dataname      = string("",format='(a13)')
 
 	file 	= settings.dir_raw + '/output_' + str + '/info_' + str + '.txt'
+
+	isfile	= FILE_SEARCH(file)
+	IF STRLEN(isfile) LE 5L THEN BEGIN
+		info	= {stat:'ng'}
+		RETURN, info
+	ENDIF
+
     OPENR,2,file
   
 	value = 0L
@@ -1041,7 +1070,7 @@ FUNCTION veluga::g_info, snap0
  	hindex(i,1) = aa(2)
 	ENDFOR
 	CLOSE, 2
-	info	= CREATE_STRUCT(info,'hindex', hindex)
+	info	= CREATE_STRUCT(info,'hindex', hindex, 'stat', 'g')
 
 	;rd_info, info, file=settings.dir_raw + 'output_' + str + '/info_' + str + '.txt'
 	RETURN, info
@@ -1209,11 +1238,11 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 
 	
 	IF KEYWORD_SET(ptime) THEN BEGIN
-		agearr 	= self->g_gyr(snao0, output.ap)
+		agearr 	= self->g_gyr(snap0, part.ap)
 
-		output.gyr 		= agearr.gyr
-		output.sfact 	= agearr.sfact
-		output.redsh 	= agearr.redsh
+		part.gyr 		= agearr.gyr
+		part.sfact 	= agearr.sfact
+		part.redsh 	= agearr.redsh
 	ENDIF
 	
 	TOC, elapsed_time=elt2
@@ -1965,6 +1994,14 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 	;;-----
 	nc 	= cell.n
 	nn 	= np + nc
+
+	;;-----
+	;; Resize bucket size
+	;;-----
+	REPEAT BEGIN
+		IF nn LT 8.d*bsize THEN bsize = bsize/2
+	ENDREP UNTIL 8.d*bsize LE nn
+	
 	dumx 	= DBLARR(nn)
 	dumy 	= DBLARR(nn)
 	dumz 	= DBLARR(nn)
@@ -2004,7 +2041,8 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 	Ecut 	= 0.d 		;; Energy cut for boundness
 	d_shell	= rc/n_shell
 	minZval	= 0.1*0.02 	;; Lower bound Metallicity for CGM (0.1 Zsun)
-	tempcut	= 1e7
+	tempcut	= 1e10;1e7
+		;; currently, abort it
 
 	;; ISM by Bound cells
 	cut 	= WHERE(Etot LT Ecut, ncut)
@@ -2180,13 +2218,16 @@ FUNCTION veluga::g_tracertag_getmorton, x, y, z
 	RETURN, x_bits OR ISHFT(y_bits,1) OR ISHFT(z_bits,2)
 END
 
-PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
+PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, input_type=input_type
 	;;-----
 	;; Give cell properties (velocity, mass and celltype if given) to tagged tracer ptcls
 	;; It is recommanded for (tracer ptcls) to have smaller range compared to cell
 	;;
 	;; mass, velocity are stored in ptcl array with 'mp' and 'vx, vy, vz' tag
 	;; celltype is stored in 'family' tag
+	;;
+	;;	add_input is used for putting new values
+	;;	input_type is setting the input type (1L - normalized by particle number // -1 not)
 	;;-----
 
 	IF ~KEYWORD_SET(celltype) THEN celltype = LONARR(cell.n) + 1L
@@ -2234,6 +2275,22 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
 	ptcl.family = celltype(ptcl_ind)	;; family is replaced with celltype
 	ptcl.mp		= cell.mp(ptcl_ind) / ptcl_nn(ptcl_ind)
 
+	;ptcl.dum1(0)	= PTR_NEW(TOTAL(cell.dx(ptcl_ind)^3))
+	IF KEYWORD_SET(add_input) THEN BEGIN
+		ntag	= N_TAGS(add_input)
+		IF ntag GT 5L THEN BEGIN
+			self->errorout, '# of dummy tag is less than input dummy: check allocate'
+		ENDIF
+
+		FOR i=1L, ntag DO BEGIN
+			IF input_type(i-1) EQ 1L THEN BEGIN
+				strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind)/ptcl_nn(ptcl_ind))'
+			ENDIF ELSE BEGIN
+				strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind))'
+			ENDELSE
+			void	= EXECUTE(strdum)
+		ENDFOR
+	ENDIF
 	RETURN
 END
 
