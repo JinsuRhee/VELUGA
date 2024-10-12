@@ -36,7 +36,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 	;;-----
 	;; CALL OBJECT
 	;;-----
-	veluga	= OBJ_NEW('veluga', header, num_thread=num_thread)
+	veluga	= OBJ_NEW('veluga', header, num_thread=num_thread, /skiplogo)
 
 	settings 	= veluga->getheader()
 	settings 	= CREATE_STRUCT(settings, 'horg', horg)
@@ -73,6 +73,7 @@ PRO veluga_pp, header, num_thread=num_thread, horg=horg
 		;;----- RUN CHECK
 		veluga_pp_runcheck, settings, runstat, ind
 
+		IF runstat(ind).iscatalog LT 0L THEN CONTINUE
 		;;-----
 		;; READ Raw catalog data
 		;;-----

@@ -290,9 +290,9 @@ CONTAINS
 ! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
     RECURSIVE SUBROUTINE quicksort(a, nn, first, last)
     IMPLICIT NONE
-    INTEGER(KIND=8), INTENT(inout) :: a(nn,2), x, t, n
-    INTEGER(KIND=4), INTENT(inout) :: first, last
-    INTEGER(KIND=4), INTENT(in) :: nn
+    INTEGER(KIND=8) :: a(nn,2), x, t, n
+    INTEGER(KIND=4) :: first, last
+    INTEGER(KIND=4) :: nn
     INTEGER(KIND=4) i, j
 
 

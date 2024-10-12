@@ -962,7 +962,7 @@ END SUBROUTINE
 !!-----
 SUBROUTINE allocate_dbl(npart, ndim)
     IMPLICIT NONE
-    INTEGER(KIND=4), INTENT(in) :: npart, ndim
+    INTEGER(KIND=4) npart, ndim
     IF(.NOT. ALLOCATED(r_dbl)) ALLOCATE(r_dbl(1:npart,1:ndim))
 END SUBROUTINE
 
@@ -973,7 +973,7 @@ END SUBROUTINE
 
 SUBROUTINE allocate_int(npart, ndim)
     IMPLICIT NONE
-    INTEGER(KIND=4), INTENT(in) :: npart, ndim
+    INTEGER(KIND=4) npart, ndim
 
     IF(.NOT. ALLOCATED(r_int)) ALLOCATE(r_int(1:npart,1:ndim))
 END SUBROUTINE
@@ -985,7 +985,7 @@ END SUBROUTINE
 
 SUBROUTINE allocate_lint(npart, ndim)
     IMPLICIT NONE
-    INTEGER(KIND=4), INTENT(IN) :: npart, ndim
+    INTEGER(KIND=4) npart, ndim
 
     IF(.NOT. ALLOCATED(r_lnt)) ALLOCATE(r_lnt(1:npart,1:ndim))
 END SUBROUTINE

@@ -1,4 +1,4 @@
-FUNCTION veluga::init, fname, num_thread=num_thread
+FUNCTION veluga::init, fname, num_thread=num_thread, skiplogo=skiplogo
 
 	IF ~KEYWORD_SET(num_thread) THEN num_thread = 1L
 
@@ -12,7 +12,27 @@ FUNCTION veluga::init, fname, num_thread=num_thread
 	
 	settings 	= self.getheader()
 
+
+	;;----- READ LOGO
+	IF ~KEYWORD_SET(skiplogo) THEN BEGIN
+		fname 	= settings.dir_lib + '/docs/veluga_logo.txt'
+		OPENR, 10, fname
+		FOR i=0L, FILE_LINES(fname)-1L DO BEGIN
+			dum = ''
+			READF, 10, dum
+			PRINT, dum
+		ENDFOR
+		CLOSE, 10
+	ENDIF
+
+
 	RETURN, 1
+END
+
+PRO veluga::setthread, nn
+
+	self.num_thread = nn
+
 END
 
 FUNCTION veluga::allocate, nn, type=type
@@ -128,37 +148,44 @@ END
 
 
 
-; Load Galaxy/Halo Catalog Data.
-; This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
-; 
-; Parameters
-; ----------
-; snap0 : int
-;	Snapshot number
-;
-; id0 : int
-;	Object ID. Use a negative value to retrieve all objects in the snapshot.
-;
-; horg: 'h' or 'g'
-;	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
-;	Default is 'g'
-;
-;
-; Returns
-; -------
-; Structured_array
-;	A structured array containing information about the objects.
-; g = veluga->r_gal(100, 1)
-;
-; Examples
-; --------
-; IDL> g = veluga->r_gal(100, 1)	; Read the galaxy with ID=1 at the snapshot of 100
-; IDL> PRINT, g[0].ID 				; Print its ID
-;
-; IDL> h = veluga->r_gal(200, -1, horg='h') ; Read all halos at the snapshot of 200
-; IDL> PRINT, h[0].mvir 					; Print the virial mass of the first halo
-
 FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
+	;+
+	; Load Galaxy/Halo Catalog Data.
+	; This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+	; 
+	; Parameters
+	; ----------
+	; snap0 : int
+	; 	Snapshot number
+	;
+	; id0 : int
+	; 	Object ID. Use a negative value to retrieve all objects in the snapshot.
+	;
+	; horg: string
+	; 	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+	; 	Default is 'g'
+	;
+	;
+	; Returns
+	; -------
+	; Structured_array
+	; 	A structured array containing information about the objects.
+	;
+	; Examples
+	; --------
+	; IDL> g = veluga->r_gal(100, 1)
+	; 		Read the galaxy with ID=1 at the snapshot of 100
+	;
+	; IDL> PRINT, g[0].ID
+	; 		Print its ID
+	;
+	; IDL> h = veluga->r_gal(200, -1, horg='h')
+	; 		Read all halos at the snapshot of 200
+	;
+	; IDL> PRINT, h[0].mvir
+	; 		Print the virial mass of the first halo
+	;+
+
 	;;-----
 	;;
 	;; IF Grpop is argued, only selected field are read
@@ -314,11 +341,91 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	RETURN, GP
 END
 
-FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
+FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_ptime
+	;+
+	; Load Member Particle of a given Galaxy/Halo Data.
+	; This method retrieves particle information of a given galaxy or halo
+	; 
+	; Parameters
+	; ----------
+	; snap0 : long
+	; 	Snapshot number
+	;
+	; id0 : long
+	; 	Object ID.
+	;
+	; horg: string {'h' or 'g'}
+	; 	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+	; 	Default is 'g'
+	;
+	; g_simunit: boolean
+	; 	If set (/g_simunit), return output unit as the ramses simulation unit
+	;
+	; g_ptime: boolean
+	; 	If set (/g_ptime), retrieve physical time unit for the age of particles
+	; 	Stored in gyr, sfact, and redsh tag
+	;
+	;
+	; Returns
+	; -------
+	; Structure
+	; 	xx, yy, zz : [kpc (physical)]
+	; 		position of particles
+	; 	vx, vy, vz : [km/s]
+	; 		velocity of particles
+	; 	mp : [Msun]
+	; 		mass of particles
+	; 	ap : [simulation unit]
+	; 		birth time
+	; 	zp : []
+	; 		metallicity
+	; 	gyr : [Gyr]
+	; 		birth time in Gyr (retrieved if g_ptime=True)
+	; 	sfact: []
+	; 		birth time in scale factor (retrieved if g_ptime=True)
+	; 	redsh: []
+	; 		birth time in redshift (retrieved if g_ptime=True)
+	; 	id : []
+	; 		Particle ID
+	; 	domain : []
+	; 		mpi domain number to which particles belong
+	; 	KE : [km^2/s^2]
+	; 		specific Kinetic energy
+	; 		retrieved when g_potential is called
+	; 	UE : [km^2/s^2]
+	; 		specific Internal energy
+	; 		retrieved when g_potential is called
+	; 	PE : [km^2/s^2]
+	; 		specific Potential energy
+	; 		retrieved when g_potential is called
+	;
+	; Examples
+	; --------
+	; IDL> g = veluga->r_part(100, 1)
+	; 		Retrieve information of the member star particle of the galaxy with ID=1 at the snapshot of 100
+	;
+	; IDL> PRINT, g[0].ID
+	; 		Print ID of the first particle
+	;
+	; IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+	; 		Retrieve information of the member star particles (including their birth time properties) that belong to the galaxy with ID=10 at the snapshot of 100
+	;
+	; IDL> h = veluga->r_gal(200, 5, horg='h')
+	; 		Retrieve information of the member DM particle of the halo with ID=5 and snapshot=200
+	;
+	; IDL> ; extract particles with an index
+	;
+	; IDL> g = veluga->r_part(100, 10, horg='g', /g_ptime)
+	;
+	; IDL> index = WHERE(g.gyr LT 1.)
+	;
+	; IDL> g_new = veluga->g_extract(g, index)
+	;		Return a new structure with a given index
+	;+
+
 
 	;;-----
 	;; READ MEMBER Part
-	;;	/simout 	- output as the simulation raw unit
 	;;-----
 	IF ~KEYWORD_SET(horg) THEN horg='g'
 	settings 	= self->getheader()
@@ -382,7 +489,7 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 
 	output.id 	= pid(cut)
 
-	IF ~KEYWORD_SET(simout) THEN BEGIN
+	IF ~KEYWORD_SET(g_simunit) THEN BEGIN
 		output.xx 	*= (info.unit_l/info.cgs.kpc)
 		output.yy 	*= (info.unit_l/info.cgs.kpc)
 		output.zz 	*= (info.unit_l/info.cgs.kpc)
@@ -394,6 +501,13 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, simout=simout
 		output.mp 	*= (info.unit_m / info.cgs.m_sun)
 	ENDIF
 
+	IF KEYWORD_SET(g_ptime) THEN BEGIN
+		agearr 	= self->g_gyr(snap0, output.ap)
+
+		output.gyr 		= agearr.gyr
+		output.sfact 	= agearr.sfact
+		output.redsh 	= agearr.redsh
+	ENDIF
 	RETURN, output
 END
 
@@ -443,13 +557,92 @@ FUNCTION veluga::r_domain, snap0, id0, horg=horg
 	RETURN, cut
 END
 
-FUNCTION veluga::r_cell, snap0, id0, rsize, horg=horg
-	;;-----
-	;; READ AMR CELL around a galaxy
-	;;-----
+FUNCTION veluga::r_cell, snap0, id0, rsize, horg=horg, g_simout=g_simout
+	;+
+	; Load cell surrouding a given Galaxy/Halo.
+	; This method retrieves cell information near a halo/galaxy given
+	; 
+	; Parameters
+	; ----------
+	; snap0 : long
+	; 	Snapshot number
+	;
+	; id0 : long
+	; 	Object ID.
+	;
+	; dx : double
+	; 	aperture
+	;
+	; horg: string {'h' or 'g'}
+	; 	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+	; 	Default is 'g'
+	;
+	; g_simunit: boolean
+	; 	If set (/g_simunit), return output unit as the ramses simulation unit
+	;
+	;
+	;
+	; Returns
+	; -------
+	; Structure
+	; 	xx, yy, zz : [kpc (physical)]
+	; 		position of cells
+	; 	vx, vy, vz : [km/s]
+	; 		velocity of cells
+	; 	dx : [kpc]
+	; 		cell size
+	; 	level : []
+	; 		cell AMR level
+	; 	den : [cc]
+	; 		density of cells
+	; 	temp : [K/mu]
+	; 		temperature of cells
+	; 	zp : []
+	; 		metallicity of cells
+	; 	mp : [Msun]
+	; 		mass of cells
+	; 	KE : [km^2/s^2]
+	; 		specific Kinetic energy
+	; 		retrieved when g_potential is called
+	; 	UE : [km^2/s^2]
+	; 		specific Internal energy
+	; 		retrieved when g_potential is called
+	; 	PE : [km^2/s^2]
+	; 		specific Potential energy
+	; 		retrieved when g_potential is called
+	; 	Chem_H, ... : []
+	; 		chemical abundance
+	; 	dust_N, ... : []
+	; 		dust abundance
+	;
+	; Examples
+	; --------
+	; IDL> cell = veluga->r_cell(100L, 1L, 10.)
+	; 		Retrieve information of the cells within a box with a length of 10 kpc centered at a galaxy
+	;
+	; IDL> PRINT, cell.xx[0]
+	; 		Print x-coordinate of the first cell
+	;
+	; IDL> cell = veluga->r_cell(100L, 10L, 100.d, horg='h')
+	; 		Retrieve information of the cells (within a box of length 100 kpc) for a halo (ID=10)
+	;
+	; IDL> ; extract cells with an index
+	;
+	; IDL> cell = veluga->r_cell(100, 10, horg='g')
+	;
+	; IDL> index = WHERE(cell.level GE 15L)
+	;
+	; IDL> cell_new = veluga->g_extract(cell, index)
+	;		Return a new structure with a given index
+	;+
+	
 
 	gal 	= self->r_gal(snap0, id0, horg=horg)
-	RETURN, self->g_cell(gal.xc, gal.yc, gal.zc, rsize, snap0)
+	IF KEYWORD_SET(g_simout) THEN BEGIN
+		RETURN, self->g_cell(snap0, gal.xc, gal.yc, gal.zc, rsize, /g_simout)	
+	ENDIF ELSE BEGIN
+		RETURN, self->g_cell(snap0, gal.xc, gal.yc, gal.zc, rsize)
+	ENDELSE
 END
 
 FUNCTION veluga::r_tree_load, horg=horg
@@ -501,17 +694,33 @@ FUNCTION veluga::r_tree, snap0, id0, horg=horg
 	RETURN, *(*tree.tree)(ind)
 END
 
+FUNCTION veluga::r_treeID, snap0, id0, horg=horg
+
+	IF ~KEYWORD_SET(horg) THEN horg = 'g'
+
+	tree 	= self->r_tree_load(horg=horg)
+
+	key 	= (*tree.key)[0]
+	keyval 	= snap0 + id0*key
+	ind 	= (*tree.key)[keyval]
+
+	RETURN, ind
+END
+
+
 FUNCTION veluga::r_evol, snap0, id0, horg=horg
 
 	;;-----
 	;; READ TREE
 	;;-----
+	IF ~KEYWORD_SET(horg) THEN horg = 'g'
 
+	
 	tree 	= self->r_tree(snap0, id0, horg=horg)
 	
 	IF TYPENAME(tree) EQ 'LONG' THEN BEGIN
 		self->errorout, 'No tree data exists for ' + horg
-		RETURN, 1L
+		RETURN, self->r_gal(snap0, id0, horg=horg)
 	ENDIF
 
 	;;-----
@@ -785,6 +994,13 @@ FUNCTION veluga::g_info, snap0
 	dataname      = string("",format='(a13)')
 
 	file 	= settings.dir_raw + '/output_' + str + '/info_' + str + '.txt'
+
+	isfile	= FILE_SEARCH(file)
+	IF STRLEN(isfile) LE 5L THEN BEGIN
+		info	= {stat:'ng'}
+		RETURN, info
+	ENDIF
+
     OPENR,2,file
   
 	value = 0L
@@ -854,7 +1070,7 @@ FUNCTION veluga::g_info, snap0
  	hindex(i,1) = aa(2)
 	ENDFOR
 	CLOSE, 2
-	info	= CREATE_STRUCT(info,'hindex', hindex)
+	info	= CREATE_STRUCT(info,'hindex', hindex, 'stat', 'g')
 
 	;rd_info, info, file=settings.dir_raw + 'output_' + str + '/info_' + str + '.txt'
 	RETURN, info
@@ -915,12 +1131,12 @@ FUNCTION veluga::g_domain, snap0, xc2, yc2, zc2, rr2
 	ENDELSE
 END
 
-FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout
+FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, ptime=ptime
 
 	;;-----
 	;; Read Particle within a sphere
 	;; IF dom_list is set, read all ptcls in the argued domain list
-	;;	/simout 	- output as the raw simulation unit
+	;;	/g_simout 	- output as the raw simulation unit
 	;;-----
 
 	settings	= self->getheader()
@@ -999,7 +1215,7 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part 	= self->allocate(npart_tot, type='part')
 	;REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L}, npart_tot)
 
-	IF ~KEYWORD_SET(simout) THEN BEGIN
+	IF ~KEYWORD_SET(g_simout) THEN BEGIN
 		xp 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
 		vp 	*= info.kms 					;; [kms]
 		mp 	*= (info.unit_m / info.cgs.m_sun); [Msun]
@@ -1020,13 +1236,22 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	part.domain = dl
 	part.id 	= id
 
+	
+	IF KEYWORD_SET(ptime) THEN BEGIN
+		agearr 	= self->g_gyr(snap0, part.ap)
+
+		part.gyr 		= agearr.gyr
+		part.sfact 	= agearr.sfact
+		part.redsh 	= agearr.redsh
+	ENDIF
+	
 	TOC, elapsed_time=elt2
 
     PRINT, elt1, ' - totnum ', elt2, ' - read all'
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=simout, timereport=timereport
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, timereport=timereport
 	;;-----
 	;; Read AMR cells within a sphere
 	;;	snap0: [1] integer
@@ -1039,7 +1264,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 	;;		domain_list
 	;;		If set, read all cells in the argued domain. If not, read all cells inside rr2 + dx
 	;;
-	;;	simout: boolean
+	;;	g_simout: boolean
 	;;		If set, output as the raw code unit
 	;;
 	;;	timereport: boolean
@@ -1071,10 +1296,10 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		zr	= [-1d,1d] * rr + zc
 	ENDIF
 
-	IF ~KEYWORD_SET(range_refine) THEN range_refine = [-1.d, 2.d]
-	IF ~KEYWORD_SET(range_xx) THEN range_xx = [-2.d, 2.d]
-	IF ~KEYWORD_SET(range_yy) THEN range_yy = [-2.d, 2.d]
-	IF ~KEYWORD_SET(range_zz) THEN range_zz = [-2.d, 2.d]
+	;IF ~KEYWORD_SET(range_refine) THEN range_refine = [-1.d, 2.d]
+	;IF ~KEYWORD_SET(range_xx) THEN range_xx = [-2.d, 2.d]
+	;IF ~KEYWORD_SET(range_yy) THEN range_yy = [-2.d, 2.d]
+	;IF ~KEYWORD_SET(range_zz) THEN range_zz = [-2.d, 2.d]
 
 	file_a	= dir + '/amr_' + STRING(snap0,'(I5.5)') + '.out'
 	file_h	= dir + '/hydro_' + STRING(snap0,'(I5.5)') + '.out'
@@ -1110,6 +1335,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		cell.xx 	= -1.d
 		RETURN, cell
 	ENDIF
+
 
 	mesh_xg	= DBLARR(ntot,info.ndim)
 	mesh_vx	= DBLARR(ntot,info.ndim)
@@ -1147,7 +1373,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, simout=si
 		larr(14)= nz
 		larr(15)= nboundary
 
-		IF ~KEYWORD_SET(simout) THEN BEGIN
+		IF ~KEYWORD_SET(g_simout) THEN BEGIN
 			tokpc 	= (info.unit_l/info.cgs.kpc)	;; [kpc]
 			tokms	= info.kms 						;; [km/s]
 			tomsun 	= info.unit_d * info.unit_l^3.d / info.cgs.m_sun 	;; [Msun]
@@ -1768,6 +1994,14 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 	;;-----
 	nc 	= cell.n
 	nn 	= np + nc
+
+	;;-----
+	;; Resize bucket size
+	;;-----
+	REPEAT BEGIN
+		IF nn LT 8.d*bsize THEN bsize = bsize/2
+	ENDREP UNTIL 8.d*bsize LE nn
+	
 	dumx 	= DBLARR(nn)
 	dumy 	= DBLARR(nn)
 	dumz 	= DBLARR(nn)
@@ -1807,7 +2041,8 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 	Ecut 	= 0.d 		;; Energy cut for boundness
 	d_shell	= rc/n_shell
 	minZval	= 0.1*0.02 	;; Lower bound Metallicity for CGM (0.1 Zsun)
-	tempcut	= 1e7
+	tempcut	= 1e10;1e7
+		;; currently, abort it
 
 	;; ISM by Bound cells
 	cut 	= WHERE(Etot LT Ecut, ncut)
@@ -1983,13 +2218,16 @@ FUNCTION veluga::g_tracertag_getmorton, x, y, z
 	RETURN, x_bits OR ISHFT(y_bits,1) OR ISHFT(z_bits,2)
 END
 
-PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
+PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, input_type=input_type
 	;;-----
 	;; Give cell properties (velocity, mass and celltype if given) to tagged tracer ptcls
 	;; It is recommanded for (tracer ptcls) to have smaller range compared to cell
 	;;
 	;; mass, velocity are stored in ptcl array with 'mp' and 'vx, vy, vz' tag
 	;; celltype is stored in 'family' tag
+	;;
+	;;	add_input is used for putting new values
+	;;	input_type is setting the input type (1L - normalized by particle number // -1 not)
 	;;-----
 
 	IF ~KEYWORD_SET(celltype) THEN celltype = LONARR(cell.n) + 1L
@@ -2037,6 +2275,22 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype
 	ptcl.family = celltype(ptcl_ind)	;; family is replaced with celltype
 	ptcl.mp		= cell.mp(ptcl_ind) / ptcl_nn(ptcl_ind)
 
+	;ptcl.dum1(0)	= PTR_NEW(TOTAL(cell.dx(ptcl_ind)^3))
+	IF KEYWORD_SET(add_input) THEN BEGIN
+		ntag	= N_TAGS(add_input)
+		IF ntag GT 5L THEN BEGIN
+			self->errorout, '# of dummy tag is less than input dummy: check allocate'
+		ENDIF
+
+		FOR i=1L, ntag DO BEGIN
+			IF input_type(i-1) EQ 1L THEN BEGIN
+				strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind)/ptcl_nn(ptcl_ind))'
+			ENDIF ELSE BEGIN
+				strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind))'
+			ENDELSE
+			void	= EXECUTE(strdum)
+		ENDFOR
+	ENDIF
 	RETURN
 END
 
