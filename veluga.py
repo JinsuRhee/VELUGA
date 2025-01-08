@@ -35,7 +35,10 @@ class veluga:
 		self.root_path = os.path.dirname(os.path.abspath(__file__))
 		void 	= self.rdheader(header)
 
-		
+		##----- LOAD TREE DATA
+		self.tree_data_g = None
+		self.tree_data_h = None
+
 		if skiplogo == False:
 			fname = self.root_path + '/docs/veluga_logo.txt'
 			with open(fname, 'r', encoding='utf-8') as file:
@@ -667,6 +670,109 @@ class veluga:
 			cell['dx']	*= (info['unit_l'] / info['cgs']['kpc'])
 
 		return cell
+
+
+	
+
+
+	##-----
+	## Get Galaxy/Halo Merger Tree DATA
+	##-----
+	def g_tree_readdat(self, filename):
+		with open(filename,'rb') as f:
+			longtype    = np.dtype(np.int32)
+			bdata       = np.fromfile(f,dtype=longtype)
+
+			## READ
+			n_branch    = bdata[0]
+			b_startind  = np.zeros(n_branch, dtype='int32')
+
+			ind0    = np.int32(1)
+			ind = np.array(range(n_branch),dtype='int32')
+			for i in ind:
+				#if(ind0>59775170):print(i)
+				b_startind[i]   = ind0
+				ind0    += np.int32(bdata[ind0] * 2 + 1)
+				ind0    += np.int32(bdata[ind0] * 4 + 1)
+
+
+			tree_key    = bdata[ind0+1:-1]
+			return bdata, b_startind, tree_key
+	def g_tree(self, n_snap, id0, horg='g'):
+
+		# Check whether tree has ever been loaded
+		if( self.tree_data_g == None or self.tree_data_h==None):
+			header 	= self.header
+			directory   = header.dir_catalog
+
+			## FOR GALAXIES            
+			dir_tree_g  = directory + 'Galaxy/tree/'
+
+			## Is pickle?
+			fname_g   = dir_tree_g + 'ctree.pkl'
+			isfile = os.path.isfile(fname_g)
+
+			if(isfile==True):
+				with open(fname_g, 'rb') as f:
+					data_g = pickle.load(f)
+			else:
+				fname_bin   = dir_tree_g + 'ctree.dat'
+				data_g    = self.g_tree_readdat(fname_bin)
+				with open(fname_g, 'wb') as f:
+					pickle.dump(data_g, f, pickle.HIGHEST_PROTOCOL)
+
+			self.tree_data_g = data_g
+
+			## FOR HALOS            
+			dir_tree_h  = directory + 'Halo/tree/'
+
+			## Is pickle?
+			fname_h   = dir_tree_h + 'ctree.pkl'
+			isfile = os.path.isfile(fname_h)
+
+			if(isfile==True):
+				with open(fname_h, 'rb') as f:
+					data_h = pickle.load(f)
+			else:
+				fname_bin   = dir_tree_h + 'ctree.dat'
+				data_h    = self.g_tree_readdat(fname_bin)
+				with open(fname_h, 'wb') as f:
+					pickle.dump(data_h, f, pickle.HIGHEST_PROTOCOL)
+
+			self.tree_data_h = data_h
+
+
+		# LOAD TREE
+		if(horg == 'g'): data = self.tree_data_g
+		if(horg == 'h'): data = self.tree_data_h
+
+		branch  = data[0]
+		bind    = data[1]
+		key     = data[2]
+
+		keyval  = n_snap + key[0]*id0
+		kind    = key[keyval]
+		ind0    = bind[kind]
+
+		n_link  = branch[ind0]
+
+		idlist  = branch[ind0+1:ind0+n_link+1]
+		snlist  = branch[ind0+n_link+1:ind0+n_link*2+1]
+
+		ind1    = ind0 + n_link*2+1
+		n_prog  = branch[ind1]
+
+		m_idlist    = np.zeros(1, dtype=np.int32) - 1
+		m_snaplist  = np.zeros(1, dtype=np.int32) - 1
+		m_merit     = np.zeros(1, dtype='<f8') - 1.
+		m_bid       = np.zeros(1, dtype=np.int32) - 1
+		if(n_prog>0):
+			m_idlist    = branch[ind1+1:ind1+n_prog+1]
+			m_snaplist  = branch[ind1+n_prog+1:ind1+n_prog*2+1]
+			m_merit     = np.double(branch[ind1+n_prog*2+1:ind1+n_prog*3+1])/1e10
+			m_bid       = branch[ind1+n_prog*3+1:ind1+n_prog*4+1]
+
+		return idlist, snlist, m_idlist, m_snaplist, m_merit, m_bid
 ##-----
 ## LOAD CATALOG ROUTINES
 ##-----
@@ -1134,5 +1240,80 @@ class veluga:
 
 
 		return part
+
+	##-----
+	## Get Galaxy/Halo Merger Tree
+	##-----
+	class r_evol_p:
+		def __init__(self, galdata, idlist, slist, horg):
+			self.galdata = galdata
+			self.idlist = idlist
+			self.slist = slist
+			self.horg = horg
+
+		def run(self, start, end, q):
+			for i in range(start, end):
+				self.galdata[i] = self.vrobj.r_gal(self.slist[i], self.idlist[i], horg=self.horg)
+
+			q.put((start, end, self.galdata[start:end]))
+
+
+
+	def r_evol(self, n_snap, id0, horg='g'):#, gprop=gal_properties, directory=dir_catalog):
+
+		
+		## Get tree of this galaxy
+		tree    = self.g_tree(n_snap, id0, horg)
+
+		idlist  = np.array(tree[0],dtype='int32')
+		snlist  = np.array(tree[1],dtype='int32')
+		n_link  = len(idlist)
+
+		## First read the galaxy
+		g0  = self.r_gal(n_snap, id0, horg=horg)
+
+		## ALLOCATE
+		gal = np.zeros(n_link, dtype=g0.dtype)
+
+		## READ
+		ind = np.array(range(n_link),dtype='int32')
+
+		#print("parallelization should be tested")
+		if(n_link < self.num_thread):
+			for i in ind:
+				gal[i]  = self.r_gal(snlist[i], idlist[i], horg=horg)
+		else:
+			prun = self.r_evol_p(gal, idlist, snlist, horg)
+			prun.vrobj = self
+
+			dind = np.int32(n_link / self.num_thread)
+			ps = []
+			q = Queue()
+
+			for th in range(self.num_thread):
+				i0 = th*dind
+				i1 = (th+1)*dind
+				if(th==0): i0 = 0
+				if(th==self.num_thread-1): i1 = n_link
+				p = Process(target=prun.run, args=(i0, i1, q))
+				#p.Process(target=prun.run, args=(i0, i1, q))
+				ps.append(p)
+
+				p.start()
+				while not q.empty():
+					i0, i1, dumdata = q.get()
+					gal[i0:i1] = dumdata
+			ok = False
+			while not ok:
+				ok = True
+				for idx in np.arange(len(ps)):
+					if (ps[idx].is_alive()):
+						ok = False
+				if(not q.empty()):
+					i0, i1, dumdata = q.get()
+					gal[i0:i1] = dumdata
+				else:
+					sleep(0.5)
+		return gal
 
 

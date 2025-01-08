@@ -203,6 +203,7 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	IF horg EQ 'h' THEN $
 		fname = dir + 'Halo/VR_Halo/snap_' + STRING(snap0,format='(I4.4)') + '.hdf5'
 
+	IF STRLEN(FILE_SEARCH(fname)) LE 5L THEN RETURN, -1L 
 	;;-----
 	;; OPEN HDF5
 	;;-----
@@ -2758,7 +2759,8 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	levind 	= cell.levelind
 
 	integrity 	= 0L
-	FOR lev=minlev, maxlev DO BEGIN
+	;FOR lev=minlev, maxlev DO BEGIN
+	FOR lev=info.levmin, info.levmax DO BEGIN
 		IF levind(lev,2) EQ 0L THEN CONTINUE
 		ind0 	= levind(lev,0)
 		ind1 	= levind(lev,1)
@@ -2834,10 +2836,10 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 				END
 		ENDCASE
 
-		
+		IF lev GE minlev AND lev LE maxlev THEN $
 
-		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
-			larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map, amrtype_l)
+			void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
+				larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map, amrtype_l)
 
 	ENDFOR
 
