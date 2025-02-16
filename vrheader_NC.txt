@@ -33,7 +33,7 @@ hydro_variables = ['den', 'vx', 'vy', 'vz', 'temp', 'zp', 'chem_H', 'chem_O', 'c
 ##-----
 ## Post processing related
 ##-----
-pp_snap	= [30, 200, 1]	;; snapshot range [snap_i, snap_f, dsnap]
+pp_snap	= [516, 516, 1]	;; snapshot range [snap_i, snap_f, dsnap]
 pp_runtype 	= {load_catalog:1, read_ptclid:1, member_match:1, compute_bulk:1, save:2};; 2 force run // 1 mild run // 0 skip
 
 pp_saveprocess	= 1 		;; 0 no save // 1 save

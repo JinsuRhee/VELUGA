@@ -42,7 +42,7 @@ pp_clump_mfrac	= 0.5		;; Mass fraction for identifying newly formed clumps
 ##-----
 ## Branch Generating related
 ##-----
-makebr_snap 	= [30, 299, 1]	;; snapshot range [snap_i, snap_f, dsnap]
+makebr_snap 	= [30, 811, 1]	;; snapshot range [snap_i, snap_f, dsnap]
 makebr_treedir	= 'des' ;; 'des' or 'prg'
 makebr_meritlimit	= 0.001
 makebr_bidkey		= 10000
@@ -53,6 +53,6 @@ makebr_bidkey		= 10000
 ctree_snap	= [30, 811]
 ctree_rfact	= 10.		;; Find Candidate galaxies within a sphere of a radius of speed * rfact * dT (10 seems good)
 ctree_meritlimit	= 0.001		;; Merit limit to end a branch
-ctree_n_step_N		= 20		;; number of branch points (>10) when collecting particles on a existing branch
-ctree_n_step_dN		= 5			;; dN between the points (corresponding to 200 MYr seems good)
-ctree_n_search		= 10		;; number of snapshots to be searched simultaneously
+ctree_n_step_N		= 25		;; number of branch points (>10) when collecting particles on a existing branch
+ctree_n_step_dN		= 4			;; dN between the points (corresponding to 200 MYr seems good)
+ctree_n_search		= 20		;; number of snapshots to be searched simultaneously
