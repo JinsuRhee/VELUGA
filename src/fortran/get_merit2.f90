@@ -59,7 +59,7 @@
           IF(i0 .LE. 0) CYCLE
           DO WHILE(1 .EQ. 1)
             IF(pid_g(i) .EQ. pid_s(i0)) THEN
-              merit(gid_g(i), gid_s(i0)) = merit(gid_g(i), gid_s(i0)) + 1
+              merit(gid_g(i)+1, gid_s(i0)+1) = merit(gid_g(i)+1,gid_s(i0)+1) + 1
               darr(1) = darr(1) + 1
               check = 1
               EXIT
@@ -90,7 +90,7 @@
         IF(npart_s(i) .GT. 0) merit(:,i) = merit(:,i) / npart_s(i)
       ENDDO
       !$OMP END PARALLEL DO
-
+      
       ind = 0
       DO i=1, n_g
         IF(npart_g(i) .GT. 0) THEN
@@ -111,7 +111,7 @@
           IF(npart_s(j) .LE. 0) CYCLE
           IF(merit(i,j) .GT. dum .AND. merit(i,j) .GT. 0) THEN
             dum = merit(i,j)
-            dumid = j
+            dumid = j-1
           ENDIF
         ENDDO
 

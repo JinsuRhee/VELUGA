@@ -8,6 +8,7 @@ FILES='get_ptcl_py.f90 get_cell_py.f90 get_amr_py.f90 find_domain_py.f90'
 ##-----
 F2PY=f2py
 
+#export CFLAGS="-fpermissive"
 ##-----
 ## FORTRAN COMPILER
 ##

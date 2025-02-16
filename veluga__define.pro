@@ -12,7 +12,6 @@ FUNCTION veluga::init, fname, num_thread=num_thread, skiplogo=skiplogo
 	
 	settings 	= self.getheader()
 
-
 	;;----- READ LOGO
 	IF ~KEYWORD_SET(skiplogo) THEN BEGIN
 		fname 	= settings.dir_lib + '/docs/veluga_logo.txt'
@@ -203,6 +202,7 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	IF horg EQ 'h' THEN $
 		fname = dir + 'Halo/VR_Halo/snap_' + STRING(snap0,format='(I4.4)') + '.hdf5'
 
+	IF STRLEN(FILE_SEARCH(fname)) LE 5L THEN RETURN, -1L 
 	;;-----
 	;; OPEN HDF5
 	;;-----
@@ -1212,9 +1212,14 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		larr, darr, file, part_ind, xp, vp, mp, ap, zp, $
 		fam, tag, dl, id, dom_list)
 
+toc, elapsed_time=elt3
+
+tic
 	part 	= self->allocate(npart_tot, type='part')
 	;REPLICATE({xx:0.d, yy:0.d, zz:0.d, vx:0.d, vy:0.d, vz:0.d, mp:0.d, ap:0.d, zp:0.d, id:0L, family:0L, domain:0L}, npart_tot)
+toc, elapsed_time=elt2a
 
+tic
 	IF ~KEYWORD_SET(g_simout) THEN BEGIN
 		xp 	*= (info.unit_l/info.cgs.kpc)	;; [kpc]
 		vp 	*= info.kms 					;; [kms]
@@ -1247,7 +1252,8 @@ FUNCTION veluga::g_part, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 	
 	TOC, elapsed_time=elt2
 
-    PRINT, elt1, ' - totnum ', elt2, ' - read all'
+    ;PRINT, elt1, ' - totnum ', elt2, ' - read all', elt
+    PRINT, elt1, ' - totnum ', elt3, ' - read all', elt2, ' - allocate', elt2a, '- allocate_f'
 	RETURN, part
 END
 
@@ -2558,9 +2564,12 @@ FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, k
 		cut_neg 	= WHERE(density LT 0., ncut)
 		IF ncut GE 1L THEN density(cut_neg) = 0.d
 
+		density0	= density
+		totmap 		= TOTAL(density)
+		totval 		= TOTAL(dz)
 		density 	= density / TOTAL(density) * TOTAL(dz) / delx / dely
 
-		RETURN, {x:ix, y:iy, z:density}
+		RETURN, {x:ix, y:iy, z:density, z0:density0, tot_map:totmap, tot_val:totval}
 	ENDELSE
 END
 
@@ -2758,7 +2767,8 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	levind 	= cell.levelind
 
 	integrity 	= 0L
-	FOR lev=minlev, maxlev DO BEGIN
+	;FOR lev=minlev, maxlev DO BEGIN
+	FOR lev=info.levmin, info.levmax DO BEGIN
 		IF levind(lev,2) EQ 0L THEN CONTINUE
 		ind0 	= levind(lev,0)
 		ind1 	= levind(lev,1)
@@ -2834,10 +2844,10 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 				END
 		ENDCASE
 
-		
+		IF lev GE minlev AND lev LE maxlev THEN $
 
-		void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
-			larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map, amrtype_l)
+			void 	= CALL_EXTERNAL(ftr_name, 'js_gasmap', $
+				larr, darr, xx2, yy2, tempdum, bandwidth, DOUBLE(xr), DOUBLE(yr), map, amrtype_l)
 
 	ENDFOR
 
@@ -2945,9 +2955,24 @@ END
 PRO veluga::t_lbt, oM, oL, H0
 	settings 	= self->getheader()
 
-	tmp_red = DINDGEN(10000)/9999.*0.98 + 0.02
+	tmp_red = DINDGEN(10000)/9999.d*0.98d + 0.02d
 	tmp_red = 1./tmp_red - 1. & tmp_red = REVERSE(tmp_red)
+	
+	
+	;; log binning beyond z = 50
+
+	dz0 	= 10000.d
+	dz1  	= 50.d
+
+	dz 		= (ALOG10(dz0) - ALOG10(dz1)) / 10000.d
+	tmp_red2= DINDGEN(10000) * dz + ALOG10(dz1)
+
+	tmp_red2= 10.d^tmp_red2
+
+	tmp_red 	= [tmp_red, tmp_red2]
 	tmp_gyr = tmp_red & tmp_gyr(0) = 0.
+
+
 
 	FOR i=1L, N_ELEMENTS(tmp_red)-1L DO BEGIN
 		QSIMP, 't_lbt_sub', 0., tmp_red(i), val, oM=oM, oL=oL
@@ -2955,10 +2980,11 @@ PRO veluga::t_lbt, oM, oL, H0
 	ENDFOR
 	tmp_red(0) 	= 0.d
 	tmp_gyr(0) 	= 0.d
-	tmp_gyr	= tmp_gyr / H0 *3.08568025e19 / 3.1536000d+16
+	tmp_gyr	= tmp_gyr / H0 *3.08568025d19 / 3.1536000d+16
 
 	tbl 	= {redsh:tmp_red, gyr:tmp_gyr, oM:oM, oL:oL, H0:H0}
 	
+
 	soM 	= STRING(oM*1000., format='(I3.3)')
 	soL 	= STRING(oL*1000., format='(I3.3)')
 	sH0		= STRING(H0*10., format='(I3.3)')
