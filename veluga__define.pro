@@ -1575,12 +1575,13 @@ FUNCTION veluga::g_cfrac, snap0, xc, yc, zc, aperture
 	RETURN, {N:conf_n, M:conf_m}
 END
 
-FUNCTION veluga::g_gyr, snap0, tconf
+FUNCTION veluga::g_gyr, snap0, tconf, info=info
 	;;-----
 	;; Compute age of ptcls in [Gyr, redsh, scale factor] from conformal unit at a given snapshot
 	;;-----
 	settings= self->getheader()
-	info 	= self->g_info(snap0)
+	IF ~KEYWORD_SET(info) THEN $
+		info 	= self->g_info(snap0)
 	oM	= info.omega_m
 	oL	= info.omega_l
 	H0	= info.h0
