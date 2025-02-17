@@ -20,7 +20,6 @@ FC = gfortran
 CC = gcc
 
 # Flags
-ARCH = -arch x86_64
 PIC  = -fPIC
 OMP  = -fopenmp
 LMEM = -mcmodel=large
@@ -30,16 +29,16 @@ NORANGE = -fno-range-check
 all: ckdtree $(DYLIBS)
 
 ckdtree:
-	$(FC) $(OMP) $(PIC) $(ARCH) -I$(CONDA_INC) -c js_kdtree.f90 -o js_kdtree.o
+	$(FC) $(OMP) $(PIC) -I$(CONDA_INC) -c js_kdtree.f90 -o js_kdtree.o
 
 %.o: %.f90
-	$(FC) $(OMP) $(PIC) $(ARCH) $(NORANGE) -I$(CONDA_INC) -c $< -o $@
+	$(FC) $(OMP) $(PIC) $(LMEM) $(NORANGE) -I$(CONDA_INC) -c $< -o $@
 
 %_c2f.o: %_c2f.c
-	$(CC) $(OMP) $(PIC) $(ARCH) -I$(CONDA_INC) -c $< -o $@
+	$(CC) $(OMP) $(PIC) -I$(CONDA_INC) -c $< -o $@
 
 %.so: %.o %_c2f.o
-	$(FC) -dynamiclib $(OMP) $(ARCH) -L$(CONDA_LIB) -lomp $^ js_kdtree.o -o $@
+	$(FC) -shared $(OMP) -L$(CONDA_LIB) $^ js_kdtree.o -o $@
 
 
 clean:
