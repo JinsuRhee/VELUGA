@@ -2574,7 +2574,7 @@ FUNCTION veluga::d_2dmap, xx, yy, zz=zz, xr=xr, yr=yr, n_pix=n_pix, mode=mode, k
 	ENDELSE
 END
 
-FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
+FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, info=info, n_pix=n_pix, $
 	amrvar=amrvar, amrtype=amrtype, minlev=minlev, maxlev=maxlev, proj=proj, $
 	delZ=delZ, xx0=xx0, vv0=vv0, memeff=memeff
 	;celltype=celltype, cellphase=cellphase, 
@@ -2617,7 +2617,9 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, n_pix=n_pix, $
 	;; Initial settings
 	;;-----
 
-	info  	= self->g_info(n_snap)
+	IF ~KEYWORD_SET(info) THEN
+		info 	= self->g_info(n_snap)
+		
 	settings= self->getheader()
 
 	IF ~KEYWORD_SET(n_pix) THEN n_pix = 1000L
