@@ -2617,9 +2617,9 @@ FUNCTION veluga::d_gasmap, n_snap, cell, xr, yr, info=info, n_pix=n_pix, $
 	;; Initial settings
 	;;-----
 
-	IF ~KEYWORD_SET(info) THEN
+	IF ~KEYWORD_SET(info) THEN $
 		info 	= self->g_info(n_snap)
-		
+
 	settings= self->getheader()
 
 	IF ~KEYWORD_SET(n_pix) THEN n_pix = 1000L
