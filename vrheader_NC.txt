@@ -33,7 +33,7 @@ hydro_variables = ['den', 'vx', 'vy', 'vz', 'temp', 'zp', 'chem_H', 'chem_O', 'c
 ##-----
 ## Post processing related
 ##-----
-pp_snap	= [516, 516, 1]	;; snapshot range [snap_i, snap_f, dsnap]
+pp_snap	= [577, 577, 1]	;; snapshot range [snap_i, snap_f, dsnap]
 pp_runtype 	= {load_catalog:1, read_ptclid:1, member_match:1, compute_bulk:1, save:2};; 2 force run // 1 mild run // 0 skip
 
 pp_saveprocess	= 1 		;; 0 no save // 1 save
@@ -50,7 +50,9 @@ makebr_bidkey		= 10000
 ##-----
 ## CTree (Complete Tree) related
 ##-----
-ctree_snap	= [30, 299]
+ctree_snap	= [30, 516]
+ctree_rerun	= 170
+ctree_rerunmod	= 5		;; for saving interval
 ctree_rfact	= 10.		;; Find Candidate galaxies within a sphere of a radius of speed * rfact * dT (10 seems good)
 ctree_meritlimit	= 0.001		;; Merit limit to end a branch
 ctree_n_step_N		= 10		;; number of branch points (>10) when collecting particles on a existing branch

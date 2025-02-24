@@ -1366,6 +1366,36 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 	veluga_ctree_intputgal, settings, complete_tree, tree_key, data, gal, ng0, ng1
 
 
+    ;; FOR RERUN CASE
+    IF settings.ctree_rerun GE 0L THEN BEGIN
+        ;; Gather upto 9999
+        varlist     = []
+        FOR i=0L, 9L DO BEGIN
+            varlist     = [varlist, $
+                FILE_SEARCH(settings.dir_tree + '/tfout/ctree_' + STRING(i,format='(I1.1)') + '*.sav')]
+        ENDFOR
+
+
+        snaplist    = LONARR(N_ELEMENTS(varlist))
+        FOR i=0L, N_ELEMENTS(varlist)-1L DO BEGIN
+            dum     = (STRSPLIT(varlist(i), '/', /extract))[-1]
+            dum2    = (STRSPLIT(dum, '_', /extract))[-1]
+            dum3    = (STRSPLIT(dum2, '.', /extract))[0]
+
+            
+            dum3    = LONG(dum3)
+
+            snaplist(i) = dum3
+        ENDFOR
+
+        sind    = SORT(snaplist)
+        snaplist = snaplist(sind) & varlist = varlist(sind)
+
+        cut     = (WHERE(snaplist GE settings.ctree_rerun))[0]
+
+        varname     = varlist(cut)
+        rerunsnap   = snaplist(cut)
+    ENDIF
 
 	;;-----
 	;; MAIN LOOP
@@ -1376,9 +1406,12 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 		
 
 		c_snap 	= settings.slist(i)
-IF c_snap GE 790L THEN CONTINUE ;;123123
-IF c_snap EQ 789L THEN $
-    RESTORE, '/storage8/NH2/VELOCIraptor/Galaxy/tree/tfout/ctree_0790.sav'
+
+        IF settings.ctree_rerun GE 0L THEN BEGIN
+            IF c_snap GE rerunsnap THEN CONTINUE
+            RESTORE, varname
+            settings.ctree_rerun = -1L
+        ENDIF
 
 
 
@@ -1442,29 +1475,15 @@ IF c_snap EQ 789L THEN $
         TOC, elapsed_time=t_addgal
 
 
-;;123456
-;IF data(30966L).snap EQ 456L THEN STOP
-
-;a=*complete_tree(7699L)
-;IF a.snap(0) NE 430L THEN STOP
-
-;c=*complete_tree(b)
-
-;if data(3956L).snap(0) NE c.snap(0) THEN STOP       
-        ; If tree is connected or renewed, set detstat to be -1
-        ;               free p_list and set n_ptcl to be negative
-        ;               free list and list_n
-
         PRINT, '                Time report [sec]'
         PRINT, '                        Add New Galaxies :', t_addgal
         PRINT, '                        Classify Galaxies :', t_classify
-        ;PRINT, '                        Det- Branch End   :', t_detend
         PRINT, '                        Collect PID       :', t_cpid
         PRINT, '                        Read Snap ptcls   :', t_rsnap
         PRINT, '                        Compute Merits    :', t_merit
         PRINT, '                        Link Branch       :', t_link
 
-        ;IF i MOD 5L EQ 0L THEN $
+        IF i MOD settings.ctree_rerunmod EQ 0L THEN $
             SAVE, FILENAME=settings.dir_tree + '/tfout/ctree_' + STRING(c_snap,format='(I4.4)') + '.sav', data, complete_tree, tree_key
 
         IF c_snap LE settings.ctree_snap(0) THEN BEGIN
@@ -1478,9 +1497,6 @@ IF c_snap EQ 789L THEN $
             ENDREP UNTIL MAX(data.list_n) EQ 0L
             BREAK
         ENDIF
-
-;IF c_snap MOD 10L EQ 0L THEN SAVE, filename='/storage6/jinsu/var/ct_' + STRING(c_snap,format='(I4.4)') + '.sav', $
-;    data, complete_tree, tree_key
 
 
     ENDFOR
