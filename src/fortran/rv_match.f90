@@ -747,7 +747,7 @@
       ENDDO
 
 
-      IF(longint .le. 10) THEN
+      IF(longint .le. 10) THEN          !! ID
         read(uout) dum_int_ll
         Do i=1, nbody
           p_int(i,3) = dum_int_ll(i)
@@ -759,7 +759,7 @@
         ENDDO
       ENDIF
 
-      read(uout) dum_int
+      read(uout) dum_int                !! LEVEL
 
       read(uout) dum_int_byte
       Do i=1, nbody
@@ -773,15 +773,19 @@
         IF(p_int(i,1) .gt. 100) p_int(i,1) = p_int(i,1) - 255
       ENDDO
 
-      read(uout) dum_dbl                !! Age
-      Do i=1, nbody
-        p_dbl(i,8) = dum_dbl(i)
-      ENDDO
+      IF(larr(12) .LT. 0) THEN
+              read(uout) dum_dbl                !! Age
+              Do i=1, nbody
+                p_dbl(i,8) = dum_dbl(i)
+              ENDDO
+      ENDIF
 
-      read(uout) dum_dbl                !! Metallicity
-      Do i=1, nbody
-        p_dbl(i,9) = dum_dbl(i)
-      ENDDO
+      IF(larr(13) .LT. 0) THEN
+              read(uout) dum_dbl                !! Metallicity
+              Do i=1, nbody
+                p_dbl(i,9) = dum_dbl(i)
+              ENDDO
+      ENDIF
 
       close(uout)
       RETURN
@@ -873,15 +877,19 @@
       !  IF(p_int(i,1) .gt. 100) p_int(i,1) = p_int(i,1) - 255
       !ENDDO
 
-      read(uout) dum_dbl                !! Age
-      Do i=1, nbody
-        p_dbl(i,8) = dum_dbl(i)
-      ENDDO
+      IF(larr(12) .LT. 0) THEN
+              read(uout) dum_dbl                !! Age
+              Do i=1, nbody
+                p_dbl(i,8) = dum_dbl(i)
+              ENDDO
+      ENDIF
 
-      read(uout) dum_dbl                !! Metallicity
-      Do i=1, nbody
-        p_dbl(i,9) = dum_dbl(i)
-      ENDDO
+      IF(larr(13) .LT. 0) THEN
+              read(uout) dum_dbl                !! Metallicity
+              Do i=1, nbody
+                p_dbl(i,9) = dum_dbl(i)
+              ENDDO
+      ENDIF
 
       close(uout)
       RETURN

@@ -51,7 +51,7 @@ makebr_bidkey		= 10000
 ## CTree (Complete Tree) related
 ##-----
 ctree_snap	= [30, 516]
-ctree_rerun	= 170
+ctree_rerun	= 145
 ctree_rerunmod	= 5		;; for saving interval
 ctree_rfact	= 10.		;; Find Candidate galaxies within a sphere of a radius of speed * rfact * dT (10 seems good)
 ctree_meritlimit	= 0.001		;; Merit limit to end a branch

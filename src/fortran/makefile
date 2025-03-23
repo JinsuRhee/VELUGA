@@ -32,7 +32,7 @@ ckdtree:
 	$(FC) $(OMP) $(PIC) -I$(CONDA_INC) -c js_kdtree.f90 -o js_kdtree.o
 
 %.o: %.f90
-	$(FC) $(OMP) $(PIC) $(NORANGE) -I$(CONDA_INC) -c $< -o $@
+	$(FC) $(OMP) $(PIC) $(LMEM) $(NORANGE) -I$(CONDA_INC) -c $< -o $@
 
 %_c2f.o: %_c2f.c
 	$(CC) $(OMP) $(PIC) -I$(CONDA_INC) -c $< -o $@
