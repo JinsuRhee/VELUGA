@@ -2287,7 +2287,7 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 		Etot 	= cell.PE + cell.KE + cell.UE
 	ENDIF ELSE IF cell.mtype EQ 1L THEN BEGIN
 		cell.PE 	= PTR_NEW(pot.PE(0L:nc-1L))
-		cell.KE 	= PTR_NEW(0.5d * (self->g_d3d(cell.vx, cell.vy, cell.vz, [vxc, vyc, vzc]))^2)
+		cell.KE 	= PTR_NEW(0.5d * (self->g_d3d(*cell.vx, *cell.vy, *cell.vz, [vxc, vyc, vzc]))^2)
 		Etot 	= *cell.PE + *cell.KE + *cell.UE
 	ENDIF
 
