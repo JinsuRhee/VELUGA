@@ -1637,9 +1637,9 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		cell.yy 	= PTR_NEW(mesh_xg(*,1))
 		cell.zz 	= PTR_NEW(mesh_xg(*,2))
 
-		cell.vx 	= PTR_NEW(mesh_hd(*,0))
-		cell.vy 	= PTR_NEW(mesh_hd(*,1))
-		cell.vz 	= PTR_NEW(mesh_hd(*,2))
+		cell.vx 	= PTR_NEW(mesh_hd(*,1))
+		cell.vy 	= PTR_NEW(mesh_hd(*,2))
+		cell.vz 	= PTR_NEW(mesh_hd(*,3))
 
 		cell.level 	= PTR_NEW(mesh_lv)
 		cell.dx 	= PTR_NEW(mesh_dx)
