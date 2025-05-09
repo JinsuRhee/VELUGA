@@ -556,6 +556,8 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_p
 		ENDIF
 
 
+
+
 		output.xx 	= PTR_NEW(pinfo(cut,0)*posf)
 		output.yy 	= PTR_NEW(pinfo(cut,1)*posf)
 		output.zz 	= PTR_NEW(pinfo(cut,2)*posf)
@@ -570,17 +572,7 @@ FUNCTION veluga::r_part, snap0, id0, horg=horg, g_simunit=g_simunit, g_ptime=g_p
 	
 		output.id 	= PTR_NEW(pid(cut))
 	
-		IF ~KEYWORD_SET(g_simunit) THEN BEGIN
-			output.xx 	*= (info.unit_l/info.cgs.kpc)
-			output.yy 	*= (info.unit_l/info.cgs.kpc)
-			output.zz 	*= (info.unit_l/info.cgs.kpc)
-	
-			output.vx 	*= (info.kms)
-			output.vy 	*= (info.kms)
-			output.vz 	*= (info.kms)
-	
-			output.mp 	*= (info.unit_m / info.cgs.m_sun)
-		ENDIF
+		
 	
 		IF KEYWORD_SET(g_ptime) THEN BEGIN
 			agearr 	= self->g_gyr(snap0,*output.ap)
@@ -1175,7 +1167,7 @@ FUNCTION veluga::g_info, snap0
 	rhoc    = 1.8800000d-29
 	mH      = 1.6600000d-24
 	mu_mol  = 1.2195d0
-	G       = 6.67259e-8
+	G       = 6.67259d-8
 	m_sun   = 1.98892d33
 	me 		= 9.1094d-28
 	sigma_t	= 6.6524587321d-25 ;; cross-section for electron
@@ -2171,6 +2163,7 @@ FUNCTION veluga::g_extract, array, ind
 	strdum 	= strdum + '}'
 
 	void 	= EXECUTE(strdum)
+	self->free, array
 
 	RETURN, array2
 
@@ -4171,7 +4164,7 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 
 			IF KEYWORD_SET(fig_rot) THEN BEGIN
 				pdum 	= self->g_newcoord_porc(pdum, fig_rot)
-				center 	= [0.d, 0.d, 0.d]
+				p_center 	= [0.d, 0.d, 0.d]
 
 			ENDIF
 
@@ -4186,24 +4179,44 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					pdum.yy = pdum.zz
 					pdum.zz = dumx
 					fig_bw2 = [fig_bw(1), fig_bw(2)]
+
+					p_center	= [center(1), center(2), center(0)]
+					p_fig_dx	= fig_dy
+					p_fig_dy	= fig_dz
+					p_fig_dz	= fig_dx
 					END
 				'XZ'	: BEGIN
 					dumy 	= pdum.yy
 					pdum.yy = pdum.zz
 					pdum.zz = dumy
 					fig_bw2 = [fig_bw(0), fig_bw(2)]
+
+					p_center	= [center(0), center(2), center(1)]
+					p_fig_dx	= fig_dx
+					p_fig_dy	= fig_dz
+					p_fig_dz	= fig_dy
 					END
 				'YX'	: BEGIN
 					dumx 	= pdum.xx
 					pdum.xx = pdum.yy
 					dpum.yy = dumx
 					fig_bw2 = [fig_bw(1), fig_bw(2)]
+
+					p_center	= [center(1), center(0), center(2)]
+					p_fig_dx	= fig_dy
+					p_fig_dy	= fig_dx
+					p_fig_dz	= fig_dz
 					END 
 				'ZY'	: BEGIN
 					dumx 	= pdum.xx
 					pdum.xx = pdum.zz
 					pdum.zz = dumx
 					fig_bw2 = [fig_bw(2), fig_bw(1)]
+
+					p_center	= [center(2), center(1), center(0)]
+					p_fig_dx	= fig_dz
+					p_fig_dy	= fig_dy
+					p_fig_dz	= fig_dx
 					END
 				'ZX'	: BEGIN
 					dumx 	= pdum.xx
@@ -4212,6 +4225,11 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					pdum.yy = dumx
 					pdum.zz = dumy
 					fig_bw2 = [fig_bw(2), fig_bw(0)]
+
+					p_center	= [center(2), center(0), center(1)]
+					p_fig_dx	= fig_dz
+					p_fig_dy	= fig_dx
+					p_fig_dz	= fig_dy
 					END
 			ENDCASE
 
@@ -4246,7 +4264,7 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					'NUV'	: ww 	= ldum(ind).nuv
 				ENDCASE
 
-				mapdum 	= self->d_part(snap, pdum2, ww, cen=center, dx=[fig_dx, fig_dy, fig_dz], n_pix=fig_npix, bandwidth=fig_bw2)
+				mapdum 	= self->d_part(snap, pdum2, ww, cen=p_center, dx=[p_fig_dx, p_fig_dy, p_fig_dz], n_pix=fig_npix, bandwidth=fig_bw2)
 
 				denmap_s(j).den 	+= mapdum.den
 				denmap_s(j).den0 	+= mapdum.den0
@@ -4264,7 +4282,7 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 
 			IF KEYWORD_SET(fig_rot) THEN BEGIN
 				cdum 	= self->g_newcoord_porc(cdum, fig_rot)
-				center 	= [0.d, 0.d, 0.d]
+				p_center 	= [0.d, 0.d, 0.d]
 			ENDIF
 
 			CASE STRUPCASE(fig_proj) OF
@@ -4272,25 +4290,48 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					END
 				'YZ'	: BEGIN
 					dumx 	= cdum.xx
-					dumy 	= cdum.yy
 					cdum.xx = cdum.yy
 					cdum.yy = cdum.zz
 					cdum.zz = dumx
+					
+					p_center	= [center(1), center(2), center(0)]
+					p_fig_dx	= fig_dy
+					p_fig_dy	= fig_dz
+					p_fig_dz	= fig_dx
+
 					END
 				'XZ'	: BEGIN
 					dumy 	= cdum.yy
 					cdum.yy = cdum.zz
 					cdum.zz = dumy
+					
+					p_center	= [center(0), center(2), center(1)]
+					p_fig_dx	= fig_dx
+					p_fig_dy	= fig_dz
+					p_fig_dz	= fig_dy
+
 					END
 				'YX'	: BEGIN
 					dumx 	= cdum.xx
 					cdum.xx = cdum.yy
 					dpum.yy = dumx
+
+					p_center	= [center(1), center(0), center(2)]
+					p_fig_dx	= fig_dy
+					p_fig_dy	= fig_dx
+					p_fig_dz	= fig_dz
+
 					END 
 				'ZY'	: BEGIN
 					dumx 	= cdum.xx
 					cdum.xx = cdum.zz
 					cdum.zz = dumx
+
+					p_center	= [center(2), center(1), center(0)]
+					p_fig_dx	= fig_dz
+					p_fig_dy	= fig_dy
+					p_fig_dz	= fig_dx
+
 					END
 				'ZX'	: BEGIN
 					dumx 	= cdum.xx
@@ -4298,14 +4339,19 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					cdum.xx = cdum.zz
 					cdum.yy = dumx
 					cdum.zz = dumy
+
+					p_center	= [center(2), center(0), center(1)]
+					p_fig_dx	= fig_dz
+					p_fig_dy	= fig_dx
+					p_fig_dz	= fig_dy
+
 					END
 			ENDCASE
 
 
 
 
-
-			mapdum 	= self->d_cell(snap, cdum, cen=center, dx=[fig_dx, fig_dy, fig_dz], n_pix=fig_npix $
+			mapdum 	= self->d_cell(snap, cdum, cen=p_center, dx=[p_fig_dx, p_fig_dy, p_fig_dz], n_pix=fig_npix $
 				,amrtype=cell_weight, amrvar=cell_type, minlev=minlev, maxlev=maxlev, info=info, /memeff)
 
 			FOR j=0L, d_ncell-1L DO BEGIN
