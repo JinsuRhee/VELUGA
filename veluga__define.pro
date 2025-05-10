@@ -2532,57 +2532,87 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 		self->errorout, 'there are tracer ptcls out of the box'
 	ENDIF
 
+	;; loop by cell
+	levind	= cell.levelind
+	nlev	= N_ELEMENTS(levind(*,0))
+	FOR l=0L, nlev-1L DO BEGIN
+		IF levind(l,2) EQ 0L THEN CONTINUE
+		lev0	= levind(l,0)
+		lev1	= levind(l,1)
+
+		lind	= LINDGEN(levind(l,2)) + lev0
+		celltmp	= self->g_extract(cell, lind)
+		celltypetmp	= celltype(lind)
 
 
-	;;----- Get Initial Hash table
-	mindx 		= MIN(cell.dx)
-	cell_nx 	= LONG64((cell.xx + 0.1*mindx) / mindx)
-	cell_ny 	= LONG64((cell.yy + 0.1*mindx) / mindx)
-	cell_nz 	= LONG64((cell.zz + 0.1*mindx) / mindx)
+		;;----- Get Initial Hash table
+		mindx 		= MIN(celltmp.dx)
+		;cell_nx 	= LONG64((celltmp.xx + 0.1*mindx) / mindx)
+		;cell_ny 	= LONG64((celltmp.yy + 0.1*mindx) / mindx)
+		;cell_nz 	= LONG64((celltmp.zz + 0.1*mindx) / mindx)
 
-	cell_key 	= self->g_tracertag_getmorton(cell_nx, cell_ny, cell_nz)
+		cell_nx 	= LONG64((celltmp.xx) / mindx)
+		cell_ny 	= LONG64((celltmp.yy) / mindx)
+		cell_nz 	= LONG64((celltmp.zz) / mindx)
 
-	cell_tbl 	= LONARR(MAX(cell_key))
-	cell_tbl(cell_key) 	= LINDGEN(N_ELEMENTS(cell_key))
+		cell_key 	= self->g_tracertag_getmorton(cell_nx, cell_ny, cell_nz)
 
-	;;----- Get Tracer Keys
-	ptcl_nx 	= LONG64((ptcl.xx + 0.1*mindx) / mindx)
-	ptcl_ny 	= LONG64((ptcl.yy + 0.1*mindx) / mindx)
-	ptcl_nz 	= LONG64((ptcl.zz + 0.1*mindx) / mindx)
+		;cell_tbl 	= LONARR(MAX(cell_key))-1L
+		;cell_tbl(cell_key) 	= LINDGEN(N_ELEMENTS(cell_key))
 
+		;;----- Get Tracer Keys
+		;ptcl_nx 	= LONG64((ptcl.xx + 0.1*mindx) / mindx)
+		;ptcl_ny 	= LONG64((ptcl.yy + 0.1*mindx) / mindx)
+		;ptcl_nz 	= LONG64((ptcl.zz + 0.1*mindx) / mindx)
+
+		ptcl_nx 	= LONG64((ptcl.xx) / mindx)
+		ptcl_ny 	= LONG64((ptcl.yy) / mindx)
+		ptcl_nz 	= LONG64((ptcl.zz) / mindx)
+
+		ptcl_key 	= self->g_tracertag_getmorton(ptcl_nx, ptcl_ny, ptcl_nz)
 	
-	ptcl_key 	= self->g_tracertag_getmorton(ptcl_nx, ptcl_ny, ptcl_nz)
-	ptcl_ind 	= cell_tbl(ptcl_key)
+		cell_tbl 	= LONARR(MAX([MAX(cell_key),MAX(ptcl_key)]))-1L
+		cell_tbl(cell_key) 	= LINDGEN(N_ELEMENTS(cell_key))
 
 
-	;;----- Get # of tracer ptcls in each cell
-	ptcl_nn 	= LONARR(MAX(ptcl_ind)+1L)		;; use collections in python
-	ptcl_nn(ptcl_ind)	++
-	
-	;;----- Give Properties to tracer
-	ptcl.vx 	= cell.vx(ptcl_ind)
-	ptcl.vy 	= cell.vy(ptcl_ind)
-	ptcl.vz 	= cell.vz(ptcl_ind)
+		ptcl_ind 	= cell_tbl(ptcl_key)
 
-	ptcl.family = celltype(ptcl_ind)	;; family is replaced with celltype
-	ptcl.mp		= cell.mp(ptcl_ind) / ptcl_nn(ptcl_ind)
+		;;----- Get # of tracer ptcls in each cell
+		ptcl_nn 	= LONARR(MAX(ptcl_ind)+1L)		;; use collections in python
 
-	;ptcl.dum1(0)	= PTR_NEW(TOTAL(cell.dx(ptcl_ind)^3))
-	IF KEYWORD_SET(add_input) THEN BEGIN
-		ntag	= N_TAGS(add_input)
-		IF ntag GT 5L THEN BEGIN
-			self->errorout, '# of dummy tag is less than input dummy: check allocate'
+		;ptcl_nn(ptcl_ind)	++
+		ntr_cut	= WHERE(ptcl_ind GE 0L, ntr_cutn)
+
+		IF ntr_cutn EQ 0L THEN CONTINUE
+		ptcl_nn(ptcl_ind(ntr_cut)) ++
+
+		;;----- Give Properties to tracer
+		ptcl.vx(ntr_cut) 	= celltmp.vx(ptcl_ind(ntr_cut))
+		ptcl.vy(ntr_cut) 	= celltmp.vy(ptcl_ind(ntr_cut))
+		ptcl.vz(ntr_cut) 	= celltmp.vz(ptcl_ind(ntr_cut))
+
+		ptcl.family(ntr_cut) = celltypetmp(ptcl_ind(ntr_cut))	;; family is replaced with celltype
+		ptcl.mp(ntr_cut)	= celltmp.mp(ptcl_ind(ntr_cut)) / ptcl_nn(ptcl_ind(ntr_cut))
+
+		;ptcl.dum1(0)	= PTR_NEW(TOTAL(cell.dx(ptcl_ind)^3))
+		IF KEYWORD_SET(add_input) THEN BEGIN
+			STOP
+			;; here input pointer should consider ptcl_ind(ntr_cut)
+			ntag	= N_TAGS(add_input)
+			IF ntag GT 5L THEN BEGIN
+				self->errorout, '# of dummy tag is less than input dummy: check allocate'
+			ENDIF
+
+			FOR i=1L, ntag DO BEGIN
+				IF input_type(i-1) EQ 1L THEN BEGIN
+					strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind)/ptcl_nn(ptcl_ind))'
+				ENDIF ELSE BEGIN
+					strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind))'
+				ENDELSE
+				void	= EXECUTE(strdum)
+			ENDFOR
 		ENDIF
-
-		FOR i=1L, ntag DO BEGIN
-			IF input_type(i-1) EQ 1L THEN BEGIN
-				strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind)/ptcl_nn(ptcl_ind))'
-			ENDIF ELSE BEGIN
-				strdum 	= 'ptcl(0).dum' + STRING(i,format='(I1.1)') + ' = PTR_NEW(add_input.(' + STRING(i-1L,format='(I1.1)') + ')(ptcl_ind))'
-			ENDELSE
-			void	= EXECUTE(strdum)
-		ENDFOR
-	ENDIF
+	ENDFOR
 	RETURN
 END
 
