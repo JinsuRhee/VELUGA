@@ -2510,7 +2510,7 @@ FUNCTION veluga::g_tracertag_getmorton, x, y, z
 	RETURN, x_bits OR ISHFT(y_bits,1) OR ISHFT(z_bits,2)
 END
 
-PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, input_type=input_type
+PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, input_type=input_type, cellind=cellind, ptcltype=ptcltype
 	;;-----
 	;; Give cell properties (velocity, mass and celltype if given) to tagged tracer ptcls
 	;; It is recommanded for (tracer ptcls) to have smaller range compared to cell
@@ -2531,6 +2531,10 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 	IF nx + ny + nz GE 1L THEN BEGIN
 		self->errorout, 'there are tracer ptcls out of the box'
 	ENDIF
+
+	;; cell index for particle
+	cellind	= LONARR(ptcl.n)-1L
+	ptcltype= LONARR(ptcl.n)-100L
 
 	;; loop by cell
 	levind	= cell.levelind
@@ -2578,12 +2582,10 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 		ptcl_ind 	= cell_tbl(ptcl_key)
 
 		;;----- Get # of tracer ptcls in each cell
-		ptcl_nn 	= LONARR(MAX(ptcl_ind)+1L)		;; use collections in python
-
-		;ptcl_nn(ptcl_ind)	++
 		ntr_cut	= WHERE(ptcl_ind GE 0L, ntr_cutn)
 
 		IF ntr_cutn EQ 0L THEN CONTINUE
+		ptcl_nn 	= LONARR(MAX(ptcl_ind)+1L)		;; use collections in python
 		ptcl_nn(ptcl_ind(ntr_cut)) ++
 
 		;;----- Give Properties to tracer
@@ -2591,8 +2593,11 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 		ptcl.vy(ntr_cut) 	= celltmp.vy(ptcl_ind(ntr_cut))
 		ptcl.vz(ntr_cut) 	= celltmp.vz(ptcl_ind(ntr_cut))
 
-		ptcl.family(ntr_cut) = celltypetmp(ptcl_ind(ntr_cut))	;; family is replaced with celltype
+		;ptcl.family(ntr_cut) = celltypetmp(ptcl_ind(ntr_cut))	;; family is replaced with celltype
+		ptcltype(ntr_cut)	= celltypetmp(ptcl_ind(ntr_cut))
 		ptcl.mp(ntr_cut)	= celltmp.mp(ptcl_ind(ntr_cut)) / ptcl_nn(ptcl_ind(ntr_cut))
+
+		cellind(ntr_cut)	= lind(ptcl_ind(ntr_cut))
 
 		;ptcl.dum1(0)	= PTR_NEW(TOTAL(cell.dx(ptcl_ind)^3))
 		IF KEYWORD_SET(add_input) THEN BEGIN
@@ -4037,9 +4042,10 @@ END
 FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, box=box, $
 	cell_type=cell_type, cell_weight=cell_weight, part_type=part_type, part_weight=part_weight, $
 	fig_dx=fig_dx, fig_dy=fig_dy, fig_dz=fig_dz, fig_rot=fig_rot, fig_proj=fig_proj, fig_npix=fig_npix, fig_bw, $
-	etc_nchunk=etc_nchunk, dom_list=dom_list, minlev=minlev, maxlev=maxlev, info=info
+	etc_nchunk=etc_nchunk, dom_list=dom_list, minlev=minlev, maxlev=maxlev, info=info, $
+	newver=newver
 
-
+	;IF ~KEYWORD_SET(newver) THEN STOP
 	;xc, yc, zc, dx : center and boxlength to load data [xc-dx,xc+dx]X ...
 	;cell part
 	;box to whole box
@@ -4201,6 +4207,11 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 			CASE STRUPCASE(fig_proj) OF
 				'XY' 	: BEGIN
 					fig_bw2 = [fig_bw(0), fig_bw(1)]
+
+					p_center	= center
+					p_fig_dx	= fig_dx
+					p_fig_dy	= fig_dy
+					p_fig_dz	= fig_dz
 					END
 				'YZ'	: BEGIN
 					dumx 	= pdum.xx
@@ -4317,6 +4328,10 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 
 			CASE STRUPCASE(fig_proj) OF
 				'XY' 	: BEGIN
+					p_center 	= center
+					p_fig_dx 	= fig_dx
+					p_fig_dy	= fig_dy
+					p_fig_dz	= fig_dz
 					END
 				'YZ'	: BEGIN
 					dumx 	= cdum.xx
