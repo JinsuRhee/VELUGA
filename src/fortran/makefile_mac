@@ -45,7 +45,7 @@ ckdtree:
 	$(CC) $(CLANG) $(OMP) $(PIC) $(ARCH) -I$(CONDA_INC) -c $< -o $@
 
 %.so: %.o %_c2f.o
-	$(FC) -dynamiclib $(OMP) $(ARCH) -L$(CONDA_LIB) -lomp $^ js_kdtree.o -o $@
+	$(FC) -dynamiclib $(OMP) $(ARCH) -L$(CONDA_LIB) -lomp $^ js_kdtree.o -o $@ -lgfortran
 
 %_conly.so: %_conly.c
 	$(CC) $(CLANG) $(OMP) $(PIC) $(ARCH) -I$(CONDA_INC) -L$(CONDA_LIB) $< -o $@

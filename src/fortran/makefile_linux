@@ -43,7 +43,7 @@ ckdtree:
 	$(CC) $(OMP) $(PIC) -I$(CONDA_INC) -c $< -o $@
 
 %.so: %.o %_c2f.o
-	$(FC) -shared $(OMP) -L$(CONDA_LIB) $^ js_kdtree.o -o $@
+	$(FC) -shared $(OMP) -L$(CONDA_LIB) $^ js_kdtree.o -o $@ -lgfortran
 
 %_conly.so: %_conly.c
 	$(CC) -shared $(PIC) $(OMP) -I$(CONDA_INC) -L$(CONDA_LIB) $< -o $@

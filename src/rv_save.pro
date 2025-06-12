@@ -36,9 +36,175 @@ IF run EQ 0L THEN RETURN
 	nsfr 	= N_ELEMENTS(settings.SFR_R)
 	nmpi 	= settings.ndomain
 	nconf 	= N_ELEMENTS(settings.CONF_R)
+
+	;;-----
+	;; SAVE HDF5 by c
+	;;-----
+
+	;;----- merge catalog data
+	cat_dtype	= LONARR(N_ELEMENTS(settings.column_list))
+
+	int_dtypelist	= ['ID', 'ID_mbp', 'hostHaloID', 'numSubStruct', 'Structuretype', 'npart']
+	FOR i=0L, N_ELEMENTS(settings.column_list)-1L DO BEGIN
+		tmp	= settings.column_list(i)
+
+		cut 	= WHERE(int_dtypelist EQ tmp, nislong)
+		IF nislong GE 1L THEN BEGIN
+			cat_dtype(i) = 1L
+		ENDIF ELSE BEGIN
+			cat_dtype(i) = -1L
+		ENDELSE
+	ENDFOR
+
+	clist_long	= settings.column_list(WHERE(cat_dtype EQ 1L))
+	clist_dbl	= settings.column_list(WHERE(cat_dtype EQ -1L))
+
+	cat_double	= DBLARR(ngal * N_ELEMENTS(clist_dbl))
+	cat_long	= LONARR(ngal * N_ELEMENTS(clist_long))
+
+	i0	= 0L
+	FOR i=0L, N_ELEMENTS(clist_long)-1L DO BEGIN
+		i1	= i0 + ngal-1L
+
+		str	= 'cat_long(' + STRTRIM(i0) + ':' + STRTRIM(i1) + ') = (*runstat.rv_raw).' + clist_long(i)
+		void	= EXECUTE(str)
+		i0	= i1 + 1L
+	ENDFOR
+
+	i0	= 0L
+	FOR i=0L, N_ELEMENTS(clist_dbl)-1L DO BEGIN
+		i1	= i0 + ngal-1L
+
+		str	= 'cat_double(' + STRTRIM(i0) + ':' + STRTRIM(i1) + ') = (*runstat.rv_raw).' + clist_dbl(i)
+		void	= EXECUTE(str)
+		i0	= i1 + 1L
+	ENDFOR
+
+	;;----- Bulk properties
+	bprop	= *runstat.rv_bprop
+	IF N_ELEMENTS(bprop.sfr) GE 2L THEN BEGIN
+		b_sfr	= TRANSPOSE(bprop.sfr)
+	ENDIF ELSE BEGIN
+		b_sfr	= [-1.d]
+	ENDELSE
+
+	IF N_ELEMENTS(bprop.abmag) GE 2L THEN BEGIN
+		b_mag	= DBLARR(ngal*N_ELEMENTS(settings.flux_list)*N_ELEMENTS(settings.mag_r))
+		i0	= 0L
+		FOR i=0L, ngal-1L DO BEGIN
+			i1	= i0 + N_ELEMENTS(settings.flux_list)*N_ELEMENTS(settings.mag_r)-1L
+			tmp = bprop.abmag(i)
+			str	= 'dummy =['
+			FOR j=0L, N_ELEMENTS(settings.flux_list)-1L DO BEGIN
+				str += 'tmp.' + STRTRIM(settings.flux_list(j))
+				IF j LT N_ELEMENTS(settings.flux_list)-1L THEN str += ', '
+			ENDFOR
+			str	+= ']'
+			void	= EXECUTE(str)
+
+			b_mag(i0:i1)	= dummy
+			i0	= i1 + 1L
+		ENDFOR
+	ENDIF ELSE BEGIN
+		b_mag = [-1.d]
+	ENDELSE
+
+	IF N_ELEMENTS(bprop.sb) GE 2L THEN BEGIN
+		b_sb	= DBLARR(ngal*N_ELEMENTS(settings.flux_list)*N_ELEMENTS(settings.mag_r))
+		i0	= 0L
+		FOR i=0L, ngal-1L DO BEGIN
+			i1	= i0 + N_ELEMENTS(settings.flux_list)*N_ELEMENTS(settings.mag_r)-1L
+			tmp = bprop.sb(i)
+			str	= 'dummy =['
+			FOR j=0L, N_ELEMENTS(settings.flux_list)-1L DO BEGIN
+				str += 'tmp.' + STRTRIM(settings.flux_list(j))
+				IF j LT N_ELEMENTS(settings.flux_list)-1L THEN str += ', '
+			ENDFOR
+			str	+= ']'
+			void	= EXECUTE(str)
+
+			b_sb(i0:i1)	= dummy
+			i0	= i1 + 1L
+		ENDFOR
+	ENDIF ELSE BEGIN
+		b_sb = [-1.d]
+	ENDELSE
+
+	b_cm	= bprop.confrac_m.aper
+	b_cn	= bprop.confrac_n.aper
+
+	IF N_ELEMENTS(bprop.isclump) GE 2L THEN BEGIN
+		b_isclump	= bprop.isclump
+	ENDIF ELSE BEGIN
+		b_isclump 	= [-1L]
+	ENDELSE
+
+	pprop	= (*runstat.rv_ptmatch)
+	IF N_ELEMENTS(pprop.dom_list) GE 2L THEN BEGIN
+		b_domlist	= TRANSPOSE(pprop.dom_list)
+	ENDIF ELSE BEGIN
+		b_domlist	= [-1L]
+	ENDELSE
+
+	;;----- Send TO C
+	ftr_name        = settings.dir_lib + 'src/fortran/save_cat_conly.so'
+                larr = LONARR(100) & darr = DBLARR(20)
+                larr(0) = ngal
+                larr(1) = nmpi
+
+		larr(10)	= N_ELEMENTS(settings.sfr_r)
+		larr(11)	= N_ELEMENTS(settings.mag_r)
+		larr(12)	= N_ELEMENTS(settings.conf_r)
+		larr(13)	= N_ELEMENTS(settings.flux_list)
+		larr(14)	= N_ELEMENTS((*runstat.rv_id).b_ind)
+		larr(15)	= N_ELEMENTS(clist_long)
+		larr(16)	= N_ELEMENTS(clist_dbl)
+		larr(17)	= N_ELEMENTS(b_sfr)
+		larr(18)	= N_ELEMENTS(b_mag)
+		larr(19)	= N_ELEMENTS(b_sb)
+		larr(20)	= N_ELEMENTS(b_isclump)
+		larr(21)	= N_ELEMENTS(b_domlist)
+
+		darr(0)		= (*runstat.rv_ptmatch).a_exp
+	
+        void    = CALL_EXTERNAL(ftr_name, 'save_cat', $
+                larr, darr, fname, $
+		DOUBLE(settings.sfr_r), DOUBLE(settings.sfr_t), DOUBLE(settings.mag_r), DOUBLE(settings.conf_r), settings.flux_list, $ ;; send info (3-7)
+		DOUBLE((*runstat.rv_raw).mass_tot),  $ 		;; bulk 8
+		DOUBLE((*runstat.rv_raw).r_halfmass),  $ 	;; bulk 9
+		DOUBLE((*runstat.rv_raw).mvir),  $ 		;; bulk 10 
+		DOUBLE((*runstat.rv_raw).rvir),  $ 		;; bulk 11
+		DOUBLE((*runstat.rv_raw).mass_200crit),  $	;; bulk 12
+		DOUBLE((*runstat.rv_raw).r_200crit),  $		;; bulk 13
+		LONG((*runstat.rv_raw).ID),  $			;; bulk 14
+		DOUBLE(TRANSPOSE((*runstat.rv_bprop).confrac_m.aper)),  $		;; bulk 15
+		DOUBLE(TRANSPOSE((*runstat.rv_bprop).confrac_n.aper)),  $		;; bulk 16
+		LONG64((*runstat.rv_id).b_ind), $		;; bulk 17
+		LONG64((*runstat.rv_id).u_ind), $		;; bulk 18
+		LONG64((*runstat.rv_id).p_id), $		;; bulk 19
+		LONG(cat_long), $				;; bulk 20
+		clist_long, $					;; bulk 21
+		DOUBLE(cat_double), $				;; bulk 22
+		clist_dbl, $					;; bulk 23
+		DOUBLE(b_sfr), $				;; bulk 24
+		DOUBLE(b_mag), $				;; bulk 25
+		DOUBLE(b_sb), $					;; bulk 26
+		DOUBLE(b_cm), $					;; bulk 27
+		DOUBLE(b_cn), $					;; bulk 28
+		LONG(b_isclump), $				;; bulk 29
+		LONG(b_domlist), $				;; bulk 30
+		1L $ ; for dummy
+		)
+
+	;;CONF_M, CONF_N
+
+	RETURN
+
+	;;----- Script below is an old one
 	;;-----
 	;; Open HDF5
 	;;-----
+
 	fid	= h5f_create(fname)
 
 	;;----- Write General Information
