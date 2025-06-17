@@ -40,10 +40,10 @@
           !!$OMP & private(nx, ny, nx0, nx1, ny0, ny1, j, k, geometry) &
           !!$OMP & reduction(+:map)
           DO i=1, n_cell
-            IF(xx(i) .LT. xr(1)) CYCLE
-            IF(xx(i) .GT. xr(2)) CYCLE
-            IF(yy(i) .LT. yr(1)) CYCLE
-            IF(yy(i) .GT. yr(2)) CYCLE
+            IF(xx(i) .LT. xr(1)-bw(1)) CYCLE
+            IF(xx(i) .GT. xr(2)+bw(1)) CYCLE
+            IF(yy(i) .LT. yr(1)-bw(2)) CYCLE
+            IF(yy(i) .GT. yr(2)+bw(2)) CYCLE
     
             nx = INT((xx(i) - xr(1))/dx) + 1
             ny = INT((yy(i) - yr(1))/dy) + 1

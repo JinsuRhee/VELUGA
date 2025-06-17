@@ -131,6 +131,15 @@ IF run EQ 2L THEN BEGIN
 				lset(4) = n_mpi
 				lset(5) = runstat.snap
 				lset(10) = STRLEN(settings.dir_raw)
+
+				;; for skip read part
+				lset(11)	= -1L
+				IF settings.skiprd_time GE 1L THEN lset(11) = 1L
+				lset(12)	= -1L
+				IF settings.skiprd_metal GE 1L THEN lset(12) = 1L
+				lset(13) 	= -1L
+				IF settings.skiprd_domain GE 1L THEN lset(13) = 1L
+
 				IF settings.famtype EQ 'old' THEN lset(18) = 100 ;; For YZiCS ver
 				IF settings.idtype EQ 'long' THEN lset(19) = 100 ;; For logn int ID
 

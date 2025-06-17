@@ -173,6 +173,14 @@ PRO veluga_ctree_classify, settings, data, snap0, number
 
 	ENDFOR
 
+;;123123
+did  = [1L, 2L, 3L, 4L, 5L, 6L, 8L, 9L, 11L, 12L, 13L]
+for i=0L, n_elements(data)-1L do begin
+	cc=where(did EQ data(i).id0, ncc)
+	IF ncc GE 1L AND data(i).snap0 NE 811L THEN data(i).stat = 'B'
+	if ncc eq 0L then data(i).stat = 'B'
+endfor
+
 	PRINT, ''
     PRINT, '                        TREE CLASSIFICATION'
     PRINT, '                                With tree       = ', number.T
@@ -513,6 +521,7 @@ PRO veluga_ctree_commerit, settings, data, pid, pid0, c_snap
     ;; No particles at this snpashot
     IF MAX(gid_s) LT 0L OR MAX(gid_g) LT 0L THEN BEGIN
         cut     = WHERE(data.stat EQ 'C', ncut)
+	IF ncut EQ 0L THEN RETURN
         FOR i=0L, ncut-1L DO BEGIN
 
             n0      = data(cut(i)).list_n
@@ -640,6 +649,7 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
             AND data.list_n GE snap_int_cut $ ;; if they have enough number of searches
             AND data.list_n GT 0L) $ ;; if their particles are collected
             , ncut)
+
 
     IF ncut EQ 0L THEN RETURN
     ;;----- Extract next points
