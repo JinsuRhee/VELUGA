@@ -1016,6 +1016,12 @@ FUNCTION veluga::g_boundind, xx=x, yy=y, zz=z, xr=xr, yr=yr, zr=zr
 	RETURN, {ind:ind, n:nn}
 END
 
+
+FUNCTION veluga::g_circle, x, y, r
+	ANG	= FINDGEN(100)/99.*!pi*2.d
+
+	RETURN, {x:COS(ang)*r + x, y:SIN(ang)*r + y}
+END
 ;;----- Smoothing related
 FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
 	yy 	= yy2
@@ -2091,7 +2097,7 @@ FUNCTION veluga::g_potential, xx, yy, zz, mm, $
 	RETURN, {PE:pot, force:force}
 END
 
-FUNCTION veluga::g_extract, array, ind
+FUNCTION veluga::g_extract, array, ind, freemem=freemem
 	;;-----
 	;; Reshape a particle / cell array with the argued ind
 	;;
@@ -2163,7 +2169,9 @@ FUNCTION veluga::g_extract, array, ind
 	strdum 	= strdum + '}'
 
 	void 	= EXECUTE(strdum)
-	self->free, array
+
+	IF KEYWORD_SET(freemem) THEN $
+		self->free, array
 
 	RETURN, array2
 
@@ -2525,12 +2533,12 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 	IF ~KEYWORD_SET(celltype) THEN celltype = LONARR(cell.n) + 1L
 
 	;; Bound check
-	void 	= WHERE(ptcl.xx LT MIN(cell.xx) OR ptcl.xx GT MAX(cell.xx), nx)
-	void 	= WHERE(ptcl.yy LT MIN(cell.yy) OR ptcl.yy GT MAX(cell.yy), ny)
-	void 	= WHERE(ptcl.zz LT MIN(cell.zz) OR ptcl.zz GT MAX(cell.zz), nz)
-	IF nx + ny + nz GE 1L THEN BEGIN
-		self->errorout, 'there are tracer ptcls out of the box'
-	ENDIF
+	;void 	= WHERE(ptcl.xx LT MIN(cell.xx) OR ptcl.xx GT MAX(cell.xx), nx)
+	;void 	= WHERE(ptcl.yy LT MIN(cell.yy) OR ptcl.yy GT MAX(cell.yy), ny)
+	;void 	= WHERE(ptcl.zz LT MIN(cell.zz) OR ptcl.zz GT MAX(cell.zz), nz)
+	;IF nx + ny + nz GE 1L THEN BEGIN
+	;	self->errorout, 'there are tracer ptcls out of the box'
+	;ENDIF
 
 	;; cell index for particle
 	cellind	= LONARR(ptcl.n)-1L
@@ -2550,14 +2558,17 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 
 
 		;;----- Get Initial Hash table
-		mindx 		= MIN(celltmp.dx)
-		;cell_nx 	= LONG64((celltmp.xx + 0.1*mindx) / mindx)
-		;cell_ny 	= LONG64((celltmp.yy + 0.1*mindx) / mindx)
-		;cell_nz 	= LONG64((celltmp.zz + 0.1*mindx) / mindx)
-
-		cell_nx 	= LONG64((celltmp.xx) / mindx)
-		cell_ny 	= LONG64((celltmp.yy) / mindx)
-		cell_nz 	= LONG64((celltmp.zz) / mindx)
+		IF celltmp.mtype EQ 0L THEN BEGIN
+			mindx 		= MIN(celltmp.dx)
+			cell_nx 	= LONG64((celltmp.xx) / mindx)
+			cell_ny 	= LONG64((celltmp.yy) / mindx)
+			cell_nz 	= LONG64((celltmp.zz) / mindx)
+		ENDIF ELSE IF celltmp.mtype EQ 1L THEN BEGIN
+			mindx 		= MIN(*celltmp.dx)
+			cell_nx 	= LONG64((*celltmp.xx) / mindx)
+			cell_ny 	= LONG64((*celltmp.yy) / mindx)
+			cell_nz 	= LONG64((*celltmp.zz) / mindx)
+		ENDIF
 
 		cell_key 	= self->g_tracertag_getmorton(cell_nx, cell_ny, cell_nz)
 
@@ -2569,9 +2580,15 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 		;ptcl_ny 	= LONG64((ptcl.yy + 0.1*mindx) / mindx)
 		;ptcl_nz 	= LONG64((ptcl.zz + 0.1*mindx) / mindx)
 
-		ptcl_nx 	= LONG64((ptcl.xx) / mindx)
-		ptcl_ny 	= LONG64((ptcl.yy) / mindx)
-		ptcl_nz 	= LONG64((ptcl.zz) / mindx)
+		IF ptcl.mtype EQ 0L THEN BEGIN
+			ptcl_nx 	= LONG64((ptcl.xx) / mindx)
+			ptcl_ny 	= LONG64((ptcl.yy) / mindx)
+			ptcl_nz 	= LONG64((ptcl.zz) / mindx)
+		ENDIF ELSE IF ptcl.mtype EQ 1L THEN BEGIN
+			ptcl_nx 	= LONG64((*ptcl.xx) / mindx)
+			ptcl_ny 	= LONG64((*ptcl.yy) / mindx)
+			ptcl_nz 	= LONG64((*ptcl.zz) / mindx)
+		ENDIF
 
 		ptcl_key 	= self->g_tracertag_getmorton(ptcl_nx, ptcl_ny, ptcl_nz)
 	
@@ -2589,14 +2606,39 @@ PRO veluga::g_tracertag, ptcl, cell, celltype=celltype, add_input=add_input, inp
 		ptcl_nn(ptcl_ind(ntr_cut)) ++
 
 		;;----- Give Properties to tracer
-		ptcl.vx(ntr_cut) 	= celltmp.vx(ptcl_ind(ntr_cut))
-		ptcl.vy(ntr_cut) 	= celltmp.vy(ptcl_ind(ntr_cut))
-		ptcl.vz(ntr_cut) 	= celltmp.vz(ptcl_ind(ntr_cut))
+		If celltmp.mtype EQ 0L THEN BEGIN
+			velodum_x	= celltmp.vx(ptcl_ind(ntr_cut))
+			velodum_y	= celltmp.vy(ptcl_ind(ntr_cut))
+			velodum_z	= celltmp.vz(ptcl_ind(ntr_cut))
+			massdum		= celltmp.mp(ptcl_ind(ntr_cut)) / ptcl_nn(ptcl_ind(ntr_cut))
+		ENDIF ELSE IF celltmp.mtype EQ 1L THEN BEGIN
+			velodum_x	= (*celltmp.vx)(ptcl_ind(ntr_cut))
+			velodum_y	= (*celltmp.vy)(ptcl_ind(ntr_cut))
+			velodum_z	= (*celltmp.vz)(ptcl_ind(ntr_cut))
+			massdum		= (*celltmp.mp)(ptcl_ind(ntr_cut)) / ptcl_nn(ptcl_ind(ntr_cut))
+		ENDIF
 
-		;ptcl.family(ntr_cut) = celltypetmp(ptcl_ind(ntr_cut))	;; family is replaced with celltype
+		IF ptcl.mtype EQ 0L THEN BEGIN
+			ptcl.vx(ntr_cut) 	= velodum_x
+			ptcl.vy(ntr_cut) 	= velodum_y
+			ptcl.vz(ntr_cut) 	= velodum_z
+			;ptcl.mp(ntr_cut)	= massdum
+		ENDIF ELSE IF ptcl.mtype EQ 1L THEN BEGIN
+			vdum_x	= *ptcl.vx
+			vdum_y	= *ptcl.vy
+			vdum_z	= *ptcl.vz
+
+			vdum_x(ntr_cut)	= velodum_x
+			vdum_y(ntr_cut)	= velodum_y
+			vdum_z(ntr_cut)	= velodum_z
+
+			ptcl.vx 	= PTR_NEW(vdum_x)
+			ptcl.vy 	= PTR_NEW(vdum_y)
+			ptcl.vz 	= PTR_NEW(vdum_z)
+			;ptcl.mp(ntr_cut)	= PTR_NEW(massdum)
+		ENDIF
+
 		ptcltype(ntr_cut)	= celltypetmp(ptcl_ind(ntr_cut))
-		ptcl.mp(ntr_cut)	= celltmp.mp(ptcl_ind(ntr_cut)) / ptcl_nn(ptcl_ind(ntr_cut))
-
 		cellind(ntr_cut)	= lind(ptcl_ind(ntr_cut))
 
 		;ptcl.dum1(0)	= PTR_NEW(TOTAL(cell.dx(ptcl_ind)^3))
@@ -3843,8 +3885,45 @@ FUNCTION veluga::d_cell, snap, cell, cen=cen, dx=dx, n_pix=n_pix, $
 		zz 	= *cell.zz
 	ENDIF
 
-	ind 	= self->g_boundind(xx=xx, yy=yy, zz=zz, xr=xr, yr=yr, zr=zr)
-	cell2 	= self->g_extract(cell, ind.ind)
+	;;----- extract
+	levind 	= cell.levelind
+	exind	= []
+	FOR lev=info.levmin, info.levmax DO BEGIN
+		IF levind(lev,2) EQ 0L THEN CONTINUE
+		ind0 	= levind(lev,0)
+		ind1 	= levind(lev,1)
+
+		dumind	= LINDGEN(ind1-ind0+1L) + ind0	
+		IF cell.mtype EQ 0L THEN BEGIN
+			cxx	= cell.xx(ind0:ind1)
+			cyy	= cell.yy(ind0:ind1)
+			czz	= cell.zz(ind0:ind1)
+
+			cdx	= cell.dx(ind0)
+		ENDIF ELSE IF cell.mtype EQ 1L THEN BEGIN
+			cxx	= (*cell.xx)(ind0:ind1)
+			cyy	= (*cell.yy)(ind0:ind1)
+			czz	= (*cell.zz)(ind0:ind1)
+
+			cdx	= (*cell.dx)(ind0)
+		ENDIF
+
+		ind	= self->g_boundind(xx=cxx, yy=cyy, zz=czz, xr=xr+[-cdx,cdx], yr=yr+[-cdx,cdx], zr=zr+[-cdx,cdx])
+
+		IF ind.N GE 1L THEN BEGIN
+			exind	= [exind, dumind(ind.ind)]
+		ENDIF
+	ENDFOR
+		
+	cell2	= self->g_extract(cell, exind)
+
+	IF cell2.n EQ 0L THEN BEGIN
+		result 	= REPLICATE({amrvar:'', amrtype:'', map:DBLARR(n_pix,n_pix), map0:DBLARR(n_pix,n_pix)}, N_ELEMENTS(amrvar))
+		RETURN, result
+	ENDIF
+
+	;ind 	= self->g_boundind(xx=xx, yy=yy, zz=zz, xr=xr, yr=yr, zr=zr)
+	;cell2 	= self->g_extract(cell, ind.ind)
 
 	IF ~KEYWORD_SET(info) THEN $
 		info 	= self->g_info(snap)
