@@ -173,13 +173,6 @@ PRO veluga_ctree_classify, settings, data, snap0, number
 
 	ENDFOR
 
-;;123123
-did  = [1L, 2L, 3L, 4L, 5L, 6L, 8L, 9L, 11L, 12L, 13L]
-for i=0L, n_elements(data)-1L do begin
-	cc=where(did EQ data(i).id0, ncc)
-	IF ncc GE 1L AND data(i).snap0 NE 811L THEN data(i).stat = 'B'
-	if ncc eq 0L then data(i).stat = 'B'
-endfor
 
 	PRINT, ''
     PRINT, '                        TREE CLASSIFICATION'
