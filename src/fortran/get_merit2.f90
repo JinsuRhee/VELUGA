@@ -26,7 +26,7 @@
       INTEGER(KIND=4) n_thread, n_pg, n_ps
       INTEGER(KIND=4) n_g, n_s, n_tree
       INTEGER(KIND=4) n_dn, n_hashth
-      INTEGER(KIND=4) idtoind(larr(3))
+      INTEGER(KIND=4) idtoind(larr(3)), offomp
 
       INTEGER(KIND=4) ind, i0, check, dumid
       REAL(KIND=8) noptcl, dum
@@ -40,43 +40,73 @@
       n_hashth   = larr(6)
       n_tree     = larr(7)
       n_thread   = larr(11)
+      offomp     = larr(12)
       !!-----
       !! MATCHING
       !!-----
+      IF(offomp .LT. 0) THEN
+        CALL OMP_SET_NUM_THREADS(n_thread)
+        !$OMP PARALLEL DO default(shared) schedule(static) &
+        !$OMP & private(ind, i0, j, check) reduction(+:merit)
+        DO i=1, n_pg
+          IF(DBLE(pid_g(i)) .LE. noptcl) CYCLE
+          ind = MOD(ABS(pid_g(i)), n_dn) + 1
+          IF(ind.LE.0) ind = 1
 
-      CALL OMP_SET_NUM_THREADS(n_thread)
-      !$OMP PARALLEL DO default(shared) schedule(static) &
-      !$OMP & private(ind, i0, j, check) reduction(+:merit)
-      DO i=1, n_pg
-        IF(DBLE(pid_g(i)) .LE. noptcl) CYCLE
-        ind = MOD(ABS(pid_g(i)), n_dn) + 1
-        IF(ind.LE.0) ind = 1
-
-        !!
-        check = -1
-        DO j=1, n_hashth
-          i0 = hash(ind,j)
-          IF(i0 .LE. 0) CYCLE
-          DO WHILE(1 .EQ. 1)
-            IF(pid_g(i) .EQ. pid_s(i0)) THEN
-              merit(gid_g(i)+1, gid_s(i0)+1) = merit(gid_g(i)+1,gid_s(i0)+1) + 1
-              darr(1) = darr(1) + 1
-              check = 1
-              EXIT
-            ELSE
-              IF(hash_next(i0,j) .GT. 0) THEN
-                i0 = hash_next(i0,j)
-              ELSE
+          !!
+          check = -1
+          DO j=1, n_hashth
+            i0 = hash(ind,j)
+            IF(i0 .LE. 0) CYCLE
+            DO WHILE(1 .EQ. 1)
+              IF(pid_g(i) .EQ. pid_s(i0)) THEN
+                merit(gid_g(i)+1, gid_s(i0)+1) = merit(gid_g(i)+1,gid_s(i0)+1) + 1
+                darr(1) = darr(1) + 1
+                check = 1
                 EXIT
+              ELSE
+                IF(hash_next(i0,j) .GT. 0) THEN
+                  i0 = hash_next(i0,j)
+                ELSE
+                  EXIT
+                ENDIF
               ENDIF
-            ENDIF
+            ENDDO
+
+            IF(check .GT. 0) EXIT
           ENDDO
-
-          IF(check .GT. 0) EXIT
         ENDDO
-      ENDDO
-      !$OMP END PARALLEL DO
+        !$OMP END PARALLEL DO
+      ELSE
+        DO i=1, n_pg
+          IF(DBLE(pid_g(i)) .LE. noptcl) CYCLE
+          ind = MOD(ABS(pid_g(i)), n_dn) + 1
+          IF(ind.LE.0) ind = 1
 
+          !!
+          check = -1
+          DO j=1, n_hashth
+            i0 = hash(ind,j)
+            IF(i0 .LE. 0) CYCLE
+            DO WHILE(1 .EQ. 1)
+              IF(pid_g(i) .EQ. pid_s(i0)) THEN
+                merit(gid_g(i)+1, gid_s(i0)+1) = merit(gid_g(i)+1,gid_s(i0)+1) + 1
+                darr(1) = darr(1) + 1
+                check = 1
+                EXIT
+              ELSE
+                IF(hash_next(i0,j) .GT. 0) THEN
+                  i0 = hash_next(i0,j)
+                ELSE
+                  EXIT
+                ENDIF
+              ENDIF
+            ENDDO
+
+            IF(check .GT. 0) EXIT
+          ENDDO
+        ENDDO
+      ENDIF
       merit     = merit * merit
 
       !$OMP PARALLEL DO default(shared) schedule(static)
@@ -119,8 +149,8 @@
           m_id(idtoind(i)) = dumid
           m_merit(idtoind(i)) = dum
         ENDIF
+
       ENDDO
       !$OMP END PARALLEL DO
-
 
       END SUBROUTINE

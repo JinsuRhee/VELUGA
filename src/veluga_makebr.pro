@@ -9,7 +9,8 @@ FUNCTION veluga_makebr_init, settings, veluga
 			tag_result	: 'Descendants', $
 			tag_npart	: 'DescNpart', $
 			tag_merit	: 'Merits', $
-			tag_nlink	: 'Nsteps_search_new_links' $
+			tag_nlink	: 'Nsteps_search_new_links', $
+			nprog		: settings.makebr_nprog $
 			}
 	ENDIF ELSE IF settings.makebr_treedir EQ 'prg' THEN BEGIN
 		treeset	= {$
@@ -21,7 +22,8 @@ FUNCTION veluga_makebr_init, settings, veluga
 			tag_result	: 'Progenitors', $
 			tag_npart	: 'ProgenNpart', $
 			tag_merit	: 'Merits', $
-			tag_nlink	: 'Nsteps_search_new_links' $
+			tag_nlink	: 'Nsteps_search_new_links', $
+			nprog		: settings.makebr_nprog $
 			}
 	ENDIF ELSE BEGIN
 		veluga->ppout, 'Incorrect Tree direction: settings.makebr_treedir'
@@ -36,7 +38,7 @@ END
 ;;-----
 FUNCTION veluga_makebr_allo, settings, veluga, treeset, max_ngal
 	snaparr	= LONARR(ABS(treeset.n1-treeset.n0)+1L)-1L
-	galarr	= LONARR(5000L)-1L
+	galarr	= LONARR(treeset.nprog)-1L
 
 	dumstr	= {ID:snaparr, snap:snaparr, p_snap:snaparr, p_id:snaparr, p_merit:DOUBLE(snaparr), $
 		d_snap:snaparr, d_id:snaparr, endind:-1L, $
@@ -133,10 +135,9 @@ PRO veluga_makebr_link, settings, tree, gind, evoldum, snap_curr, snap_next, $
         evoldum.id(gind)        = dum_id
         evoldum.snap(gind)      = snap_next
         evoldum.merit(gind)     = dum_mer
-
         tree(gind).ID(tree(gind).endind)        = t_id
         tree(gind).snap(tree(gind).endind)      = snap_curr
-        IF snap_curr EQ tree(gind).snap(tree(gind).endind-1L) THEN STOP ;;123123
+        IF snap_curr EQ tree(gind).snap(tree(gind).endind-1L) THEN STOP 
         IF settings.makebr_treedir EQ 'des' THEN BEGIN
                 tree(gind).p_snap(tree(gind).endind+1L) = snap_curr
                 tree(gind).p_ID(tree(gind).endind+1L)           = t_ID
@@ -168,6 +169,7 @@ END
 ;; Finish Branch
 ;;-----
 PRO veluga_makebr_finishbranch, settings, tree, complete_tree, n_comp, ind, stat
+IF n_comp EQ 406408L THEN STOP
         a       = tree(ind)
         nn      = a.endind
         nn2     = (a.numprog-2L) > 0L
@@ -213,7 +215,22 @@ END
 PRO veluga_makebr_reallocate_t, tree, gind, evoldum, maxgind
         maxind  = N_ELEMENTS(tree) + maxgind
         ;; tree
-        tree2   = REPLICATE(tree(0), maxind)
+	tr_empty	= tree(0)
+        tr_empty.ID           = -1L
+        tr_empty.snap         = -1L
+        tr_empty.p_snap       = -1L
+        tr_empty.p_id         = -1L
+        tr_empty.p_merit      = -1.d
+        tr_empty.d_snap       = -1L
+        tr_empty.d_id         = -1L
+        tr_empty.endind       = -1L
+        tr_empty.m_id         = -1L
+        tr_empty.m_snap       = -1L
+        tr_empty.m_merit      = -1.d
+        tr_empty.m_bid        = -1L
+        tr_empty.numprog      = 1L
+
+        tree2   = REPLICATE(tr_empty, maxind)
         tree2(0L:gind)  = tree(0L:gind)
         tree    = tree2
 
@@ -333,7 +350,6 @@ PRO veluga_makebr_match, settings, veluga, treelog, tree, complete_tree, n_comp,
 	;; loop by galaxy
 	FOR i=0L, N_ELEMENTS(t_curr.id)-1L DO BEGIN
 		IF t_curr.num(i) EQ 0L THEN CONTINUE
-
 		treelog.n_all ++
 
 		ind1    = t_curr.off(i)
@@ -373,7 +389,6 @@ PRO veluga_makebr_match, settings, veluga, treelog, tree, complete_tree, n_comp,
                         maxmerit        = MAX(evoldum.merit(cut_exist))
                         ind0            = MIN(cut_exist(WHERE(evoldum.merit(cut_exist) EQ maxmerit)))
                         endind          = tree(ind0).endind+1
-
 			FOR li=0L, N_ELEMENTS(cut_exist)-1L DO BEGIN
 				ind     = cut_exist(li)
                                 IF ind EQ ind0 THEN BEGIN;evoldum.merit(ind) EQ maxmerit THEN BEGIN
@@ -431,32 +446,32 @@ PRO veluga_makebr_remove, settings, evoldum, tree, gind, complete_tree, n_comp, 
 END
 
 ;;----- GEN KEY
-FUNCTION veluga_makebr_genkey, settings, tree
+FUNCTION veluga_makebr_genkey, settings, tree, max_id2
 
-        MAX_snap        = 200L
-        MAX_ID          = 10000L
-
+        MAX_snap        = 200LL
+        MAX_ID          = LONG64(max_id2) + 10000LL
+STOP
         genkey_redo:
-        tree_key        = LONARR(MAX_snap + settings.makebr_bidkey*MAX_ID) - 1L
+        tree_key        = LON64ARR(MAX_snap + settings.makebr_bidkey*MAX_ID) - 1L
 
         n_tree          = N_ELEMENTS(tree)
         FOR i=0L, n_tree-1L DO BEGIN
                 tmp             = *tree(i)
                 s               = tmp.snap
                 id              = tmp.id
-                ind     = s + settings.makebr_bidkey*id
+                ind     = LONG64(s) + LONG64(settings.makebr_bidkey)*LONG64(id)
 
                 IF MAX(id) GT MAX_ID THEN BEGIN
-                        MAX_ID          = MAX(id) + 1L
+                        MAX_ID          = MAX(id) + 1LL 	;; 1 is slow but memory safe
                         GOTO, genkey_redo
                 ENDIF
                 IF MAX(s) GT MAX_snap THEN BEGIN
-                        MAX_snap        = MAX(s) + 1L
+                        MAX_snap        = MAX(s) + 1LL
                         GOTO, genkey_redo
                 ENDIF
 
                 IF MAX(s) GT settings.makebr_bidkey THEN BEGIN
-                        power   = LOGN(ALOG10(MAX(s))) + 1.d
+                        power   = LONG(ALOG10(MAX(s))) + 1.d
                         settings.P_makebr_bidkey = LONG(10.d^power)
                         GOTO, genkey_redo
                 ENDIF
@@ -464,12 +479,14 @@ FUNCTION veluga_makebr_genkey, settings, tree
 
                 tree_key(ind)   = i
         ENDFOR
+	
         RETURN, tree_key
 END
 
 ;;-----
 ;; MAIN
 ;;-----
+;; error in maxgind (if set, tree corruption)
 PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 
 	;;-----
@@ -494,7 +511,7 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 	;;-----
 	;; ALLOCATE
 	;;-----
-	max_ngal	= 50000L
+	max_ngal	= 100000L
 		;; size of branch array (automatically reallocate when N>max_ngal) updated?
 	tree	= veluga_makebr_allo(settings, veluga, treeset, max_ngal)
 		;; array for branch
@@ -514,16 +531,29 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 	;;-----
 	gind	= -1L
 	n_comp	= 0L
-	treelog	= {n_new:0L, n_link:0L, n_link2:0L, n_link3:0L, n_broken:0L, n_all:0L}
+	treelog	= {n_new:0L, n_link:0L, n_link2:0L, n_link3:0L, n_broken:0L, n_all:0L, max_id:-1L}
+
 
 	FOR i=treeset.n0, treeset.n1, treeset.dn DO BEGIN
                 ;IF i MOD 10L EQ 0L THEN $
                 ;        SAVE, filename=settings.dir_tree + '/tfout/tree_' + STRING(i,format='(I4.4)') + '.sav', treelog, tree, complete_tree, n_comp, gind, evoldum
 
-                ;IF i EQ 811L THEN $
+                ;IF i EQ 115L THEN BEGIN
                 ;        SAVE, filename=settings.dir_tree + '/tfout/tree_' + STRING(i,format='(I4.4)') + '.sav', treelog, tree, complete_tree, n_comp, gind, evoldum
+		;	STOP
+		;ENDIF
+		;IF I LT 117L THEN CONTINUE
+		;IF I EQ 117L THEN RESTORE, settings.dir_tree + '/tfout/tree_' + STRING(i,format='(I4.4)') + '.sav'
 
+		IF i MOD 5L EQ 0L THEN SAVE, filename=settings.dir_tree + '/tfout/tree_' + STRING(i,format='(I4.4)') + '.sav', treelog, tree, complete_tree, n_comp, gind, evoldum
+		;SAVE, filename=settings.dir_tree + '/tfout/tree_' + STRING(i,format='(I4.4)') + '.sav', treelog, tree, complete_tree, n_comp, gind, evoldum
 
+;x=complete_tree(406408)
+;IF i EQ 116L THEN STOP
+;IF i EQ 116L THEN BEGIN
+
+ 
+		
                 IF N_ELEMENTS(tree) - gind LT max_ngal*0.2 THEN $
                         veluga_makebr_reallocate_t, tree, gind, evoldum, max_ngal
                 IF N_ELEMENTS(complete_tree) - n_comp LT max_ngal*0.2 THEN $
@@ -569,6 +599,8 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 		g_next	= veluga->r_gal(snap_next, -1L, Gprop=['ID', 'npart'], horg=settings.horg)
 
 
+		treelog.max_id	= MAX([treelog.max_id, MAX(g_curr.ID)])
+
 		IF t_curr.nlink GE 2L THEN BEGIN
 			FOR i2=0L, t_curr.nlink-2L DO BEGIN
 				snap_next = veluga_makebr_findnextsnap(settings, snap_next)
@@ -578,10 +610,8 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 			ENDFOR
 		ENDIF
 
-
 		;;----- MATCHING
 		veluga_makebr_match, settings, veluga, treelog, tree, complete_tree, n_comp, t_curr, g_curr, g_next, gind, evoldum, snap_curr
-
 		;;----- REMOVE BRANCH
 		veluga_makebr_remove, settings, evoldum, tree, gind, complete_tree, n_comp, snap_curr, t_curr.nlink
 
@@ -599,18 +629,20 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
 
 		PRINT, '	Takes in ', elt, '[sec]'
 
+		oldmax_id	= treelog.max_id
                 FOR ii=0L, N_TAGS(treelog)-1L DO treelog.(ii) = 0L
+		treelog.max_id 	= oldmax_id
 	ENDFOR
 
 	;; GENERATE KEY
-	tree_key        = veluga_makebr_genkey(settings, complete_tree)
+	tree_key        = veluga_makebr_genkey(settings, complete_tree, treelog.max_id)
 	tree_key(0)	= settings.makebr_bidkey
 
 	;; KEY ASSIGNMENT CHECK
 	FOR i=0L, N_ELEMENTS(complete_tree)-1L DO BEGIN
                 tt      = *complete_tree(i)
                 IF TYPENAME(tt) EQ 'UNDEFINED' THEN CONTINUE
-                keyval  = tt.snap + tree_key(0)*tt.id
+                keyval  = LONG64(tt.snap) + LONG64(tree_key(0))*LONG64(tt.id)
                 keyind  = tree_key(keyval)
                 void    = WHERE(keyind NE i, nn)
                 IF nn GE 1L THEN BEGIN
@@ -620,5 +652,5 @@ PRO veluga_makebr, header, num_thread=num_thread, horg=horg
         ENDFOR
 
 	SAVE, filename=settings.dir_tree + '/tfout/tree.sav', complete_tree, tree_key
-
+	PRINT, '^-^'
 END
