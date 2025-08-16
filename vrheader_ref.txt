@@ -45,7 +45,8 @@ pp_clump_mfrac	= 0.5		;; Mass fraction for identifying newly formed clumps
 makebr_snap 	= [10, 92, 1]	;; snapshot range [snap_i, snap_f, dsnap]
 makebr_treedir	= 'des' ;; 'des' or 'prg'
 makebr_meritlimit	= 0.001
-makebr_bidkey		= 10000
+makebr_bidkey		= 100000
+makebr_nprog	= 10000		;; maximum number of progenitor (large number required)
 
 ##-----
 ## CTree (Complete Tree) related

@@ -208,7 +208,8 @@
       INTEGER(KIND=4) nx_full, ny_full, nz_full
 
       INTEGER(KIND=4) ix, iy, iz, ngrida, nx, ny, nz, twotondim
-      
+      INTEGER(KIND=4) force_levcut
+
       REAL(KIND=8), DIMENSION(1:3) :: xbound=(/0d0,0d0,0d0/)
       REAL(KIND=8), DIMENSION(1:8,1:3) :: xc
       REAL(KIND=8) dx, dx2
@@ -233,6 +234,7 @@
       ny        = larr(14)
       nz        = larr(15)
 
+      force_levcut = larr(20)
       
       ngrid   = 0
       ordering = 'hilbert'
@@ -371,7 +373,11 @@
               x(k,2) = (xg(k,2)+xc(ind,2)-xbound(2))
               x(k,3) = (xg(k,3)+xc(ind,3)-xbound(3))
 
-              ok_cell = .NOT. (son(k,ind)>0 .AND. ilevel<levelmax)
+              IF(force_levcut .LT.0) THEN
+                ok_cell = .NOT. (son(k,ind)>0 .AND. ilevel<levelmax)
+              ELSE
+                ok_cell = (ilevel<=force_levcut) .AND. (son(k,ind)==0 .OR. ilevel==force_levcut)
+              ENDIF
               IF(ok_cell) THEN
                 omp_ind = omp_ind + 1
 

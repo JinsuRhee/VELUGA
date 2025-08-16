@@ -340,7 +340,8 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	n_mpi	= N_ELEMENTS(dlist)
 
 	tmpstr	+= 'flux_List:flux_list, CONF_R:CONF_R, MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
-
+	;; for conflict data type
+	;tmpstr	+=  'flux_List:flux_list, CONF_R:DOUBLE(CONF_R), MAG_R:DOUBLE(MAG_R), SFR_R:DOUBLE(SFR_R), SFR_T:DOUBLE(SFR_T)}'
 	void	= EXECUTE(tmpstr)
 	GP	= REPLICATE(GP, n_gal)
 	
@@ -1425,7 +1426,7 @@ tic
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, timereport=timereport, memeff=memeff
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, timereport=timereport, memeff=memeff, force_levcut=force_levcut
 	;;-----
 	;; Read AMR cells within a sphere
 	;;	snap0: [1] integer
@@ -1470,6 +1471,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		zr	= [-1d,1d] * rr + zc
 	ENDIF
 
+	IF ~KEYWORD_SET(force_levcut) THEN force_levcut = -1L
 	;IF ~KEYWORD_SET(range_refine) THEN range_refine = [-1.d, 2.d]
 	;IF ~KEYWORD_SET(range_xx) THEN range_xx = [-2.d, 2.d]
 	;IF ~KEYWORD_SET(range_yy) THEN range_yy = [-2.d, 2.d]
@@ -1495,6 +1497,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		larr(7) = LONG(info.levmin)
 		larr(8) = LONG(info.levmax)
 
+		larr(19)= force_levcut
 		mg_ind	= LONARR(info.ncpu)
 		ntot	= 0L
 		nvarh	= 0L
@@ -1548,7 +1551,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		larr(13)= ny
 		larr(14)= nz
 		larr(15)= nboundary
-
+		larr(19)= force_levcut
 		IF ~KEYWORD_SET(g_simout) THEN BEGIN
 			tokpc 	= (info.unit_l/info.cgs.kpc)	;; [kpc]
 			tokms	= info.kms 						;; [km/s]

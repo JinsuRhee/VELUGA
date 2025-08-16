@@ -25,12 +25,13 @@
       INTEGER(KIND=4) mg_num(larr(6),larr(9))
       INTEGER(KIND=4) mg_indtmp(larr(6))
       INTEGER(KIND=4) ind_tmp, ngrida, twotondim, ntemp
+      INTEGER(KIND=4) force_levcut
 
       INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: ngridfile
       INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: ngridbound
       INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: son
 
-      CHARACTER(100) domnum, fdum_a, fdum_h
+      CHARACTER(200) domnum, fdum_a, fdum_h
 
       ndom = larr(1)
       n_thread = larr(3)
@@ -38,6 +39,7 @@
       ndim = larr(7)
       levelmin = larr(8)
       levelmax = larr(9)
+      force_levcut = larr(20)
       twotondim = 2**ndim
       CALL OMP_SET_NUM_THREADS(n_thread)
 
@@ -56,7 +58,6 @@
       READ(11); READ(11); READ(11) nboundary
       READ(11); READ(11)
       CLOSE(11)
-
 
       larr(11)  = nx
       larr(12)  = ny
@@ -146,13 +147,24 @@
 
           IF(ngrida>0) THEN
             DO k=1, ngrida !MERGE DATA
-
               DO ind=1, twotondim
-                IF(son(k,ind)==0) THEN
-                  ntot = ntot + 1
-                  mg_indtmp(icpu) = mg_indtmp(icpu) + 1
+                !HERE FOR foce-cutting amr level not to have too many
+                !cells in some memory related issues
+                IF(force_levcut .LT. 0) THEN ! READ normallzy
+                  IF(son(k,ind)==0) THEN
+                    ntot = ntot + 1
+                    mg_indtmp(icpu) = mg_indtmp(icpu) + 1
+                  ENDIF
+                ELSE ! READ UPTO force_levcut cells
+                  IF(j .GT. force_levcut) CYCLE
+                  IF(son(k,ind)==0 .OR. j .EQ. force_levcut) THEN
+                    ntot = ntot + 1
+                    mg_indtmp(icpu) = mg_indtmp(icpu) + 1
+                  ENDIF
                 ENDIF
+
               ENDDO
+
             ENDDO
           ENDIF
 

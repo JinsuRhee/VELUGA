@@ -25,6 +25,7 @@ END
 FUNCTION veluga_ctree_gtree, ctree, key, snap0, id0
 
 	keyval 	= snap0 + id0*key(0)
+	IF keyval GE N_ELEMENTS(key) THEN RETURN, 1L
 	ind 	= key(keyval)
 	IF ind EQ -1L THEN RETURN, 1L
 	RETURN, *ctree(ind)
@@ -168,6 +169,7 @@ PRO veluga_ctree_classify, settings, data, snap0, number
                 number.C        ++
         ENDIF ELSE BEGIN
                 data(i).stat    = 'B'
+		veluga_ctree_free, data, i, -1L, -1L, c_snap
                 number.B        ++
         ENDELSE
 
@@ -552,11 +554,10 @@ PRO veluga_ctree_commerit, settings, data, pid, pid0, c_snap
         larr(6) = N_ELEMENTS(cut)
 
         larr(10)= 1L;tree_set.num_thread
-
+	larr(11)= 1L;; turn off OMP due to memory usage
         ;;-----
         ;; Again, a serial calculation has a good performance, but OMP has a bug at the moment
-        
-
+  
     void    = CALL_EXTERNAL(ftr_name, 'get_merit2', $
     	larr, darr, pid_g, gid_g, pid_s, gid_s, $
         hash, hash_next, $
@@ -588,7 +589,6 @@ FUNCTION veluga_ctree_brcompare, settings, s0, id0, slist, idlist
     veluga  = settings.veluga
     pid0    = veluga->r_pid(s0, id0, horg=settings.horg)
     pweight0= veluga_ctree_getweight(pid0)
-
     IF N_ELEMENTS(slist) EQ 1L THEN BEGIN
         pid1    = veluga->r_pid(slist(0), idlist(0), horg=settings.horg)
         pweight1= veluga_ctree_getweight(pid1)
@@ -603,7 +603,6 @@ FUNCTION veluga_ctree_brcompare, settings, s0, id0, slist, idlist
                 ;pid1   = p_ctree_collectpidonbranch(tree_set, slist, idlist)
     ENDELSE
         ;; factor is to be 1 if all pid1 exist in a galaxy during n_step_bw
-
     ;;-----
     ;; Factor calculation
     ;;  - should be 1 if all particles appear during the selected part of the branch
@@ -647,7 +646,6 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
     IF ncut EQ 0L THEN RETURN
     ;;----- Extract next points
     next_point  = REPLICATE({merit:0.d, id:0L, snap:0L}, ncut)
-
     FOR i=0L, ncut-1L DO BEGIN
         ind     = cut(i)
         mlist   = data(ind).list.merit
@@ -660,7 +658,6 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
         next_point(i).snap      = slist(cut2)
         next_point(i).merit     = MAX(mlist)
     ENDFOR
-
 
     ;;----- Check Connectivity
 
@@ -684,8 +681,6 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
 
         i0  = i1 + 1L
     ENDFOR
-
-
     islink  = LONARR(ncut) + 1L
     FOR i=0L, ncut-1L DO BEGIN
         ind     = cut(i)
@@ -693,9 +688,7 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
             islink(i) = -1L
             CONTINUE
         ENDIF
-
         ischeck     = WHERE(checkarr.snap EQ next_point(i).snap AND checkarr.id EQ next_point(i).id, nischeck)
-
 
         IF nischeck EQ 0L THEN BEGIN
             islink(i) = -1L ;; No further link (all list have low merit)
@@ -712,19 +705,15 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
             com_ind     = checkarr(ischeck).ind
 
             com_merit   = DBLARR(nischeck)
-            
             FOR k=0L, nischeck-1L DO BEGIN
                 tk  = tree_key(com_snap0(k) + com_id0(k)*tree_key(0))
                 tt  = *complete_tree(tk)
-            
                 tt_cut  = WHERE(tt.snap GT com_snap(k) + settings.ctree_n_step_dn, n_tt_cut)
                 IF n_tt_cut EQ 0L THEN BEGIN
                     tt_cut  = WHERE(tt.snap GT com_snap(k))
                 ENDIF
                 com_merit(k)    = veluga_ctree_brcompare(settings, com_snap(k), com_id(k), tt.snap(tt_cut), tt.id(tt_cut))
             ENDFOR    
-
-
 
             com_ext     = WHERE(com_id0 NE data(ind).id0 OR com_snap0  NE data(ind).snap0)
             other_merit   = MAX(com_merit(com_ext))
@@ -735,6 +724,8 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
             IF this_merit LT other_merit THEN BEGIN
                 islink(i) = -1L
 
+		next_point(i).id = -1L
+		next_point(i).snap = -1L
 ;                list_ind    = WHERE(data(ind).list.id EQ next_point(i).id AND data(ind).list.snap EQ next_point(i).snap, nrem)
 ;                IF nrem EQ 0L THEN STOP ;; !?
 
@@ -761,6 +752,7 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
 
     ENDFOR
 
+
     ;;----- Close data for islink < 0
     isclose     = WHERE(islink LT 0L, nclose)
     IF nclose GE 1L THEN BEGIN
@@ -774,7 +766,6 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
 
     ENDIF
 
-
     ;;----- Link to a next checkpoint
     isnext  = WHERE(islink GT 0L, nnext)
     IF nnext GE 1L THEN BEGIN
@@ -784,18 +775,19 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
         FOR i=0L, nnext-1L DO BEGIN
             ind     = cut2(i)
 
+	    IF data(ind).stat EQ 'B' THEN CONTINUE	;; this branch is linked to another
+
             snap_tolink     = next_point(i).snap
             id_tolink       = next_point(i).id
             merit_tolink    = next_point(i).merit  
             
-            ;; Check Whether there is tree existed
+	    ;; Check Whether there is tree existed
             kval    = snap_tolink + tree_key(0)*id_tolink
             tind    = tree_key(kval)
 
             IF tind EQ -1L THEN BEGIN       ;; notree
                 veluga_ctree_expandbr, data, ind, complete_tree, tree_key, id_tolink, snap_tolink, merit_tolink
                 
-    
                 IF data(ind).stat EQ 'B' THEN BEGIN
                     STOP
                     veluga_ctree_free, data, ind, -1L, -1L, c_snap
@@ -822,7 +814,6 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
 
 
     ENDIF
-
 
     RETURN
 
@@ -950,6 +941,7 @@ PRO veluga_ctree_linkbr, settings, data, ind, complete_tree, tree_key, idc, snap
 
     IF merit_com GT merit_org THEN BEGIN    ;; Existing tree is better
         data(ind).stat = 'B'
+	veluga_ctree_free, data, ind, -1L, -1L, c_snap	
         RETURN
     ENDIF; ELSE BEGIN ;; a few more check for stealing this branch
         ;brcompare_cut2  = WHERE(tmp_tree_toc.snap GT snapc + ctree_n_step_dN, nbr_com2)
@@ -1404,6 +1396,9 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
 	;; MAIN LOOP
 	;;		TO DO
 	;;			Merit calculation considering weights
+	;;
+	;;		NOTE
+	;;			data().stat='B' Should be followed by veluga_ctree_free
 	;;-----
 	FOR i=N_ELEMENTS(settings.slist)-1L, 0L, -1L DO BEGIN
 		
@@ -1415,7 +1410,6 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
             RESTORE, varname
             settings.ctree_rerun = -1L
         ENDIF
-
 
 
 		PRINT, '%123123-----'
@@ -1466,6 +1460,7 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
         ;; LINK TREE
         ;;-----
         TIC
+
         veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
         TOC, elapsed_time=t_link
 
@@ -1498,6 +1493,7 @@ PRO veluga_ctree, header, num_thread=num_thread, horg=horg
                 veluga_ctree_detend, settings, data, complete_tree, tree_key
 
             ENDREP UNTIL MAX(data.list_n) EQ 0L
+            ;ENDREP UNTIL nbr EQ 0L
             BREAK
         ENDIF
 
