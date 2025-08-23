@@ -330,7 +330,11 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 		tmp2	= 'n_t = N_ELEMENTS(t' + Gprop(j) + ')'
 		void	= EXECUTE(tmp2)
 
+IF STRUPCASE(Gprop(j)) EQ 'ID' OR STRUPCASE(Gprop(j)) EQ 'ID_MBP' OR STRUPCASE(GProp(j)) EQ 'HOSTHALOID' THEN BEGIN
+		IF n_t EQ 1L THEN void = EXECUTE('t' + Gprop(j) + ' = LONG(t' + Gprop(j) + '(0))')
+ENDIF ELSE BEGIN
 		IF n_t EQ 1L THEN void = EXECUTE('t' + Gprop(j) + ' = t' + Gprop(j) + '(0)')
+ENDELSE
 		H5D_CLOSE, did
 		tmpstr	+= Gprop(j) + ':t'+ Gprop(j) + ', '
 	ENDFOR
@@ -339,9 +343,9 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	tmpstr	+= 'isclump:-1L, Aexp:1.0d, Domain_List:dlist,  '
 	n_mpi	= N_ELEMENTS(dlist)
 
-	tmpstr	+= 'flux_List:flux_list, CONF_R:CONF_R, MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
+	;tmpstr	+= 'flux_List:flux_list, CONF_R:CONF_R, MAG_R:MAG_R, SFR_R:SFR_R, SFR_T:SFR_T}'
 	;; for conflict data type
-	;tmpstr	+=  'flux_List:flux_list, CONF_R:DOUBLE(CONF_R), MAG_R:DOUBLE(MAG_R), SFR_R:DOUBLE(SFR_R), SFR_T:DOUBLE(SFR_T)}'
+	tmpstr	+=  'flux_List:flux_list, CONF_R:DOUBLE(CONF_R), MAG_R:DOUBLE(MAG_R), SFR_R:DOUBLE(SFR_R), SFR_T:DOUBLE(SFR_T)}'
 	void	= EXECUTE(tmpstr)
 	GP	= REPLICATE(GP, n_gal)
 	
@@ -1176,9 +1180,10 @@ FUNCTION veluga::g_info, snap0
 	mu_mol  = 1.2195d0
 	G       = 6.67259d-8
 	m_sun   = 1.98892d33
+	l_sun	= 3.846d33	;; erg/s
 	me 		= 9.1094d-28
 	sigma_t	= 6.6524587321d-25 ;; cross-section for electron
-	cgs 	= {kpc:kpc, hplanck:hplanck, eV:eV, kB:kB, clight:clight, Gyr:Gyr, mH:mH, me:me, G:G, m_sun:m_sun, sigma_t:sigma_t}
+	cgs 	= {kpc:kpc, hplanck:hplanck, eV:eV, kB:kB, clight:clight, Gyr:Gyr, mH:mH, me:me, G:G, m_sun:m_sun, sigma_t:sigma_t, l_sun:l_sun}
 
 	scale_l    = my_rarr(8)
 	scale_d    = my_rarr(9)
@@ -4123,7 +4128,7 @@ END
 	
 FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, box=box, $
 	cell_type=cell_type, cell_weight=cell_weight, part_type=part_type, part_weight=part_weight, $
-	fig_dx=fig_dx, fig_dy=fig_dy, fig_dz=fig_dz, fig_rot=fig_rot, fig_proj=fig_proj, fig_npix=fig_npix, fig_bw, $
+	fig_dx=fig_dx, fig_dy=fig_dy, fig_dz=fig_dz, fig_rot=fig_rot, fig_proj=fig_proj, fig_npix=fig_npix, fig_bw=fig_bw, $
 	etc_nchunk=etc_nchunk, dom_list=dom_list, minlev=minlev, maxlev=maxlev, info=info, $
 	newver=newver
 
@@ -4530,6 +4535,196 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 	
 	RETURN, denmap
 
+END
+;;----- Get SB map from Lsun map
+FUNCTION veluga::g_lumtosb, lmap, band, redsh, k_corr=k_corr, bgmag=bgmag, bgtexp=bgtexp, bgpsize=bgpsize
+
+	IF KEYWORD_SET(k_corr) THEN BEGIN
+		self->errorout, 'not implemented yet'
+		RETURN, 1
+	ENDIF
+
+	CASE STRUPCASE(band) OF
+		'U'		: magsun = 6.55
+		'G'		: magsun = 5.12
+		'R'		: magsun = 4.68
+		'I'		: magsun = 4.57
+		'Z'		: magsun = 4.54
+		'NUV'	: magsun = 10.18
+	ENDCASE
+
+	lmap0	= (lmap > 1d-32) / 1d6		;; [Lsun / pc^2] from the original source
+	lmap0	= lmap0 / (1.d + redsh)^4.d	;; cosmic dimming
+
+	
+	IF KEYWORD_SET(bgmag) THEN BEGIN
+		info 	= self->g_info(1)
+
+		CASE STRUPCASE(band) OF
+			'U'		: wave0 = 3543.d
+			'G'		: wave0 = 4770.d
+			'R'		: wave0 = 6231.d
+			'I'		: wave0 = 7625.d
+			'Z'		: wave0 = 9134.d
+			'NUV'	: 	  STOP
+		ENDCASE
+
+		CASE STRUPCASE(band) OF
+			'U'		: dwave0 = 566.d
+			'G'		: dwave0 = 1176.d
+			'R'		: dwave0 = 1131.d
+			'I'		: dwave0 = 1253.d
+			'Z'		: dwave0 = 999.d
+			'NUV'	: 	  STOP
+		ENDCASE
+
+
+		cosdist	= self->g_cosdist(redsh)
+		kpctoarc= (0.001d) / cosdist.a * 180.d / !pi * 3600.d 	;; 1'' / kpc
+		psize	= bgpsize * kpctoarc				;; pixel in arcsec 
+
+		lmap1	= 10.^ ((bgmag - magsun - 21.572d)/(-2.5d)) * 1d6	;; Lsun / kpc^2
+
+		lmap1	= lmap1 * bgpsize^2				;; Lsun in pixel
+		lmap1	= lmap1 / info.cgs.l_sun			;; erg / s
+		lmap1	= lmap1 / (info.cgs.hplanck * wave0 * 1d-10)	;; # / s
+		lmap1	= lmap1 * bgtexp				;; #
+
+		lmap_bg	= lmap0 * 0.d + RANDOMU(4590, N_ELEMENTS(lmap0), poisson=lmap1, /double)
+		
+		lmap_bg	= lmap_bg / bgtexp				;; # / s
+		lmap_bg	= lmap_bg *  (info.cgs.hplanck * wave0 * 1d-10) * info.cgs.l_sun / bgpsize^2	;; Lsun / kpc^2
+		lmap_bg	= lmap_bg / 1d6				;; Lsun / pc^2
+	
+		lmap0	= lmap0 + lmap_bg
+		;;
+		;f_mu	= 3631.d * 10.^ ( -0.4d * bgmag )		;; [Jy / arcsec^2]
+		;f_mu	= f_mu * psize^2				;; [Jy / pixel]
+		;f_mu	= f_mu * 1d-23					;; [erg / s / cm^2 / Hz]
+
+		;dndt	= f_mu * dwave0 / (info.cgs.hplanck * wave0)	;; [# / s / cm^2]
+
+		;bgtelsize	= 100.d 				;; 1m telescope?
+		;dndt	= dndt*bgtelsize^2				;; [# / s]
+		;
+		;dn	= dndt * bgtexp	;; [#]
+
+		;lmap_bg	= lmap0 * 0.d + RANDOMU(4589, N_ELEMENTS(lmap0), poisson=dn, /double)
+		;STOP
+
+		;lmap_bg	= lmap_bg / bgtexp	;; [# / s]
+		;lmap_bg	= lmap_bg * (info.cgs.hplanck * wave0 * 1d-10) / info.cgs.l_sun	;; [Lsun]
+
+		;lmap_bg	= lmap_bg / bgpsize^2.				;; [Lsun / kpc^2]
+;STOP
+		;lmap0	= lmap0 + lmap_bg
+	ENDIF
+
+	sbmap	= magsun + 21.572d - 2.5d * ALOG10(lmap0)	;; [mag/arcsec^2]
+
+	;sbmap	= (lmap0 > 1d-32) / 1d6	;; to Lsun / pc^2
+	;sbmap	= magsun + 21.572d - 2.5d * ALOG10(sbmap)	;; [mag/arcsec^2]
+	;sbmap	= sbmap + 10.d * ALOG10(1.d + redsh)	;; cosmic dimming
+
+	;cdist	= self->g_cosdist(redsh)
+	;arckpc	= (1d-3) / cdist.a * 180.d / !pi * 3600.d		;; 1''/kpc
+	;sbmap	= lmap / arckpc^2					;; Lsun / arcsec^2
+	;sbmap	= sbmap  > 1d-32
+	;sbmap	= mag0 - 2.5d * ALOG10(sbmap)				;; (ab) mag / arcsec^2
+	;sbmap	= sbmap + 5.d * ALOG10(cdist.l * 1000.d * 1000.d) - 5.d ;; mag / arcsec^2
+	RETURN, sbmap
+END
+
+;;----- Get SB map from Lsun map
+FUNCTION veluga::g_sbtolum, sbmap, band, redsh
+
+	CASE STRUPCASE(band) OF
+		'U'		: magsun = 6.55
+		'G'		: magsun = 5.12
+		'R'		: magsun = 4.68
+		'I'		: magsun = 4.57
+		'Z'		: magsun = 4.54
+		'NUV'	: magsun = 10.18
+	ENDCASE
+	lmap	= sbmap - magsun - 21.572d
+	lmap	= 10.^(lmap / (-2.5d))	;; Lsun / pc^2
+	lmap	= lmap * 1d6		;; Lsun / kpc^2
+	RETURN, lmap
+END
+
+;;----- Get SB noise (output in Lsun / kpc^2)
+;; dx in kpc (pixel size)
+FUNCTION veluga::g_sbnoise, sb0, band, redsh, dx, t_exp, n_pix
+
+	info 	= self->g_info(1)
+
+	CASE STRUPCASE(band) OF
+		'U'		: wave0 = 3543.d
+		'G'		: wave0 = 4770.d
+		'R'		: wave0 = 6231.d
+		'I'		: wave0 = 7625.d
+		'Z'		: wave0 = 9134.d
+		'NUV'	: 	  STOP
+	ENDCASE
+
+	CASE STRUPCASE(band) OF
+		'U'		: dwave0 = 566.d
+		'G'		: dwave0 = 1176.d
+		'R'		: dwave0 = 1131.d
+		'I'		: dwave0 = 1253.d
+		'Z'		: dwave0 = 999.d
+		'NUV'	: 	  STOP
+	ENDCASE
+
+	f_mu	= 3631.d * 10.^ ( -0.4d * sb0 ) * 1d-23
+	dndt	= f_mu * dwave0 / (info.cgs.hplanck * wave0)	;; [# / s / cm^2 / arcsec^2]
+
+	;cdist	= self->g_cosdist(redsh)
+	;pixinarc	= dx * (0.001d) / cdist.a * 180.d / !pi * 3600.d
+
+	dn	= dndt * t_exp
+	nmap	= DBLARR(n_pix, n_pix) + RANDOMU(22, n_pix*n_pix, poisson=dn)
+
+	nmap	= nmap / t_exp
+	nmap	= nmap / dwave0 * (info.cgs.hplanck * wave0)
+	nmap	= nmap > 1d-32
+	nmap	= ALOG10(nmap / 1d-23 / 3631.d) / (-0.4d)
+	RETURN, nmap
+
+
+	print, 'here from input original lmap and add bgnoise'
+STOP
+
+
+	wave0	= wave0 / 1d8	;; [cm]
+	photoE	= info.cgs.hplanck * info.cgs.clight / wave0
+
+	pmap	= lmap / photoE
+	RETURN, pmap
+END
+
+;;----- Get Cosmological distance
+FUNCTION g_cosdist_ftn, X, _extra=extra
+	oM	= extra.oM
+	oL	= extra.oL
+
+	RETURN, 1.d/SQRT(oM*(1.d + X)^3 + oL)
+END
+FUNCTION veluga::g_cosdist, redsh
+
+	info	= self->g_info(1L)
+
+	dH	= info.cgs.clight / info.H0 * 1d-5
+
+	;; cosmoving distance
+	QSIMP, 'g_cosdist_ftn', 0, redsh, val, oM=info.omega_M, oL=info.omega_L
+	dist_cm	= val*dH
+
+	dist_ang= dist_cm / (1.d + redsh)
+	dist_lum= dist_cm * (1.d + redsh)
+
+	RETURN, {c:dist_cm, l:dist_lum, a:dist_ang}
+		
 END
 ;;-----
 ;; TABLE GENERATOR & LOAD
