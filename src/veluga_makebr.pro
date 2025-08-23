@@ -169,7 +169,6 @@ END
 ;; Finish Branch
 ;;-----
 PRO veluga_makebr_finishbranch, settings, tree, complete_tree, n_comp, ind, stat
-IF n_comp EQ 406408L THEN STOP
         a       = tree(ind)
         nn      = a.endind
         nn2     = (a.numprog-2L) > 0L

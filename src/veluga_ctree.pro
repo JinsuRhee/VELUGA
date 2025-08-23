@@ -114,6 +114,8 @@ FUNCTION veluga_ctree_getsnapinfo, settings, veluga
 	sinfo(slist).snap 	= slist
 
 	FOR i=0L, N_ELEMENTS(sinfo)-1L DO BEGIN
+		;IF sinfo(i).snap EQ 242L THEN sinfo(i).snap = -1L
+		;IF sinfo(i).snap EQ 243L THEN sinfo(i).snap = -1L	;; for NC remedy
 		IF sinfo(i).snap LT 0L THEN CONTINUE
 		
 		info 	= veluga->g_info(i)
@@ -688,7 +690,7 @@ PRO veluga_ctree_link, settings, data, number, c_snap, complete_tree, tree_key
             islink(i) = -1L
             CONTINUE
         ENDIF
-        ischeck     = WHERE(checkarr.snap EQ next_point(i).snap AND checkarr.id EQ next_point(i).id, nischeck)
+        ischeck     = WHERE(checkarr.snap EQ next_point(i).snap AND checkarr.id EQ next_point(i).id AND checkarr.merit GT settings.ctree_meritlimit, nischeck)
 
         IF nischeck EQ 0L THEN BEGIN
             islink(i) = -1L ;; No further link (all list have low merit)
