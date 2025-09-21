@@ -114,8 +114,8 @@ FUNCTION veluga_ctree_getsnapinfo, settings, veluga
 	sinfo(slist).snap 	= slist
 
 	FOR i=0L, N_ELEMENTS(sinfo)-1L DO BEGIN
-		;IF sinfo(i).snap EQ 242L THEN sinfo(i).snap = -1L
-		;IF sinfo(i).snap EQ 243L THEN sinfo(i).snap = -1L	;; for NC remedy
+		IF sinfo(i).snap EQ 242L THEN sinfo(i).snap = -1L
+		IF sinfo(i).snap EQ 243L THEN sinfo(i).snap = -1L	;; for NC remedy
 		IF sinfo(i).snap LT 0L THEN CONTINUE
 		
 		info 	= veluga->g_info(i)
@@ -211,7 +211,7 @@ FUNCTION veluga_ctree_getweight, pid
 
 	nn 	= N_ELEMENTS(pid)
 	weight	= DINDGEN(nn)+1.d
-	weihgt	= REVERSE(weight) / nn
+	weight	= REVERSE(weight) / nn
 	weight 	/= (0.5772156649d + ALOG(nn*1.d))
 
 	RETURN, weight
@@ -531,7 +531,7 @@ PRO veluga_ctree_commerit, settings, data, pid, pid0, c_snap
     ENDIF
 
     ;; ALLOCATE (ID = IND in fortran)
-    merit   = DBLARR(MAX(gid_g)+1L, MAX(gid_s)+1L)
+    ;merit   = DBLARR(MAX(gid_g)+1L, MAX(gid_s)+1L)
     npart_g = LONARR(MAX(gid_g)+1L)
     npart_s = LONARR(MAX(gid_s)+1L)
 
@@ -556,14 +556,14 @@ PRO veluga_ctree_commerit, settings, data, pid, pid0, c_snap
         larr(6) = N_ELEMENTS(cut)
 
         larr(10)= 1L;tree_set.num_thread
-	larr(11)= 1L;; turn off OMP due to memory usage
+	larr(11)= -1L;; turn off OMP due to memory usage
         ;;-----
         ;; Again, a serial calculation has a good performance, but OMP has a bug at the moment
   
     void    = CALL_EXTERNAL(ftr_name, 'get_merit2', $
     	larr, darr, pid_g, gid_g, pid_s, gid_s, $
         hash, hash_next, $
-        npart_g, npart_s, merit, $
+        npart_g, npart_s, $;merit, $
         match_id, match_merit)
 
     FOR i=0L, ncut-1L DO BEGIN
