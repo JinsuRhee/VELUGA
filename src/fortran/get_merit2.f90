@@ -71,6 +71,7 @@
       nn_s = nn_s - 1
 
       ALLOCATE(merit(1:nn_g, 1:nn_s))
+      merit = 0.
 !PRINT *, 'BB' 
       !!-----
       !! MATCHING
