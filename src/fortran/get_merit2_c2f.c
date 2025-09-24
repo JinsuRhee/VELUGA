@@ -20,9 +20,9 @@ void get_merit2(int argc, void *argv[])
   hash_next	= (long *) argv[7];
   npart_g	= (long *) argv[8];
   npart_s	= (long *) argv[9];
-  merit		= (double *) argv[10];
-  m_id		= (long *) argv[11];
-  m_merit	= (double *) argv[12];
+  //merit		= (double *) argv[10];
+  m_id		= (long *) argv[10];
+  m_merit	= (double *) argv[11];
 
-  get_merit2_(larr, darr, pid_g, gid_g, pid_s, gid_s, hash, hash_next, npart_g, npart_s, merit, m_id, m_merit);   /* Compute sum */
+  get_merit2_(larr, darr, pid_g, gid_g, pid_s, gid_s, hash, hash_next, npart_g, npart_s, m_id, m_merit);   /* Compute sum */
 }
