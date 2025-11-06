@@ -172,6 +172,492 @@ END
 ;;-----
 ;; READ ROUTINE
 ;;-----
+FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
+	;+
+	; Load Galaxy/Halo Catalog Data.
+	; This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
+	; 
+	; Parameters
+	; ----------
+	; snap0 : int
+	; 	Snapshot number
+	;
+	; id0 : int
+	; 	Object ID. Use a negative value to retrieve all objects in the snapshot.
+	;
+	; horg: string
+	; 	A flag to specify the object type. Galaxy for 'g' and Halo for 'h'
+	; 	Default is 'g'
+	;
+	;
+	; Returns
+	; -------
+	; Structured_array
+	; 	A structured array containing information about the objects.
+	;
+	; Examples
+	; --------
+	; IDL> g = veluga->r_gal(100, 1)
+	; 		Read the galaxy with ID=1 at the snapshot of 100
+	;
+	; IDL> PRINT, g[0].ID
+	; 		Print its ID
+	;
+	; IDL> h = veluga->r_gal(200, -1, horg='h')
+	; 		Read all halos at the snapshot of 200
+	;
+	; IDL> PRINT, h[0].mvir
+	; 		Print the virial mass of the first halo
+	;+
+
+	;;-----
+	;;
+	;; IF Grpop is argued, only selected field are read
+	;;-----
+
+	;;-----
+	;; READ Galaxies
+	;;-----
+	IF ~KEYWORD_SET(horg) THEN horg = 'g'
+	settings	= self.getheader()
+	dir 		= settings.dir_catalog
+
+	IF horg EQ 'g' THEN $
+		fname = dir + 'Galaxy/VR_Galaxy/snap_' + STRING(snap0,format='(I4.4)') + '.hdf5'
+	IF horg EQ 'h' THEN $
+		fname = dir + 'Halo/VR_Halo/snap_' + STRING(snap0,format='(I4.4)') + '.hdf5'
+
+	IF STRLEN(FILE_SEARCH(fname)) LE 5L THEN RETURN, -1L
+
+	
+
+	;;-----
+	;; Read Header
+	;;-----
+	fid	= H5F_OPEN(fname)
+
+	flux_list 	= settings.flux_list ;self->r_gal_getdata(fid, 'Flux_List')
+	sfr_r 		= settings.sfr_r ;self->r_gal_getdata(fid, 'SFR_R')
+	sfr_t 		= settings.sfr_t ;self->r_gal_getdata(fid, 'SFR_T')
+	mag_r 		= settings.mag_r ;self->r_gal_getdata(fid, 'MAG_R')
+	conf_r 		= settings.conf_r ;self->r_gal_getdata(fid, 'CONF_R')
+	ID 			= self->r_gal_getdata(fid, 'ID')
+	H5F_CLOSE, fid
+
+
+	;;-----
+	;; Set & Mapping the column list
+	;;		0	: ID
+	;;		1	: ID_mbp
+	;;		2	: hostHaloID
+	;;		3	: numSubStruct
+	;;		4	: Structuretype
+	;;		5	: Mvir
+	;;		6	: Mass_tot
+	;;		7	: Mass_FOF
+	;;		8	: Mass_200mean
+	;;		9	: Efrac
+	;;		10	: Mass_200crit
+	;;		11	: Rvir
+	;;		12	: R_size
+	;;		13	: R_200mean
+	;;		14	: R_200crit
+	;;		15	: R_HalfMass
+	;;		16	: R_HalfMass_200mean
+	;;		17	: R_HalfMass_200crit
+	;;		18	: Rmax
+	;;		19	: Xc
+	;;		20	: Yc
+	;;		21	: Zc
+	;;		22	: VXc
+	;;		23	: VYc
+	;;		24	: VZc
+	;;		25	: Lx
+	;;		26	: Ly
+	;;		27	: Lz
+	;;		28	: sigV
+	;;		29	: Vmax
+	;;		30	: npart
+	;;		31	: SFR
+	;;		32	: ABmag
+	;;		33	: SB
+	;;		34	: ConFrac_M
+	;;		35	: ConFrac_N
+	;;		36 	: isclump
+	;;		37 	: Domain_List
+	;;-----
+
+	IF ~KEYWORD_SET(gprop) THEN BEGIN 
+		gprop		= settings.column_list;[settings.column_list, settings.gal_prop]
+	
+		FOR i=0L, N_ELEMENTS(settings.gal_prop)-1L DO BEGIN
+	
+			IF settings.gal_prop(i) EQ 'sfr' THEN settings.gal_prop(i) = 'SFR'
+			IF settings.gal_prop(i) EQ 'SFR' THEN gprop	= [gprop, settings.gal_prop(i)]
+	
+			IF settings.gal_prop(i) EQ 'abmag' THEN settings.gal_prop(i) = 'ABmag'
+			IF settings.gal_prop(i) EQ 'ABmag' THEN gprop	= [gprop, settings.gal_prop(i)]
+				
+			IF settings.gal_prop(i) EQ 'sb' THEN settings.gal_prop(i) = 'SB'
+			IF settings.gal_prop(i) EQ 'SB' THEN gprop	= [gprop, settings.gal_prop(i)]
+			
+			IF settings.gal_prop(i) EQ 'conf' THEN settings.gal_prop(i) = 'CONF'
+			IF settings.gal_prop(i) EQ 'confrac' THEN settings.gal_prop(i) = 'CONF'
+			IF settings.gal_prop(i) EQ 'CONF' THEN $
+				gprop 	= [gprop, 'ConFrac_M', 'ConFrac_N']
+		ENDFOR
+	ENDIF
+
+	gprop 	= [gprop, 'isclump', 'Domain_List']
+
+	gprop_str 	= STRARR(N_ELEMENTS(gprop))
+	gprop_tag 	= LONARR(N_ELEMENTS(gprop))
+	gprop_type	= LONARR(N_ELEMENTS(gprop)) ;; long 1 & double 2
+	gprop_nn 	= LONARR(N_ELEMENTS(gprop))
+	FOR i=0L, N_ELEMENTS(gprop)-1L DO BEGIN
+		CASE gprop(i) OF
+			'ID'					: BEGIN
+				gprop_tag(i) = 0L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'ID_mbp'				: BEGIN
+				gprop_tag(i) = 1L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'hostHaloID'			: BEGIN
+				gprop_tag(i) = 2L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'numSubStruct'			: BEGIN
+				gprop_tag(i) = 3L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'Structuretype'			: BEGIN
+				gprop_tag(i) = 4L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'Mvir'					: BEGIN
+				gprop_tag(i) = 5L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Mass_tot'				: BEGIN
+				gprop_tag(i) = 6L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Mass_FOF'				: BEGIN
+				gprop_tag(i) = 7L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Mass_200mean'			: BEGIN
+				gprop_tag(i) = 8L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Efrac'					: BEGIN
+				gprop_tag(i) = 9L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Mass_200crit'			: BEGIN
+				gprop_tag(i) = 10L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Rvir'					: BEGIN
+				gprop_tag(i) = 11L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'R_size'				: BEGIN
+				gprop_tag(i) = 12L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'R_200mean'				: BEGIN
+				gprop_tag(i) = 13L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'R_200crit'				: BEGIN
+				gprop_tag(i) = 14L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'R_HalfMass'			: BEGIN
+				gprop_tag(i) = 15L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'R_HalfMass_200mean'	: BEGIN
+				gprop_tag(i) = 16L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'R_HalfMass_200crit'	: BEGIN
+				gprop_tag(i) = 17L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Rmax'					: BEGIN
+				gprop_tag(i) = 18L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Xc'					: BEGIN
+				gprop_tag(i) = 19L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Yc'					: BEGIN
+				gprop_tag(i) = 20L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Zc'					: BEGIN
+				gprop_tag(i) = 21L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'VXc'					: BEGIN
+				gprop_tag(i) = 22L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'VYc'					: BEGIN
+				gprop_tag(i) = 23L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'VZc'					: BEGIN
+				gprop_tag(i) = 24L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Lx'					: BEGIN
+				gprop_tag(i) = 25L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Ly'					: BEGIN
+				gprop_tag(i) = 26L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Lz'					: BEGIN
+				gprop_tag(i) = 27L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'sigV'					: BEGIN
+				gprop_tag(i) = 28L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'Vmax'					: BEGIN
+				gprop_tag(i) = 29L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= 1L
+				END
+			'npart'					: BEGIN
+				gprop_tag(i) = 30L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'SFR'					: BEGIN
+				gprop_tag(i) = 31L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= N_ELEMENTS(sfr_r)
+				IF horg EQ 'h' THEN gprop_nn(i) = 1L
+				END
+			'ABmag'				: BEGIN
+				gprop_tag(i) = 32L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= N_ELEMENTS(mag_r)*N_ELEMENTS(flux_list)
+				IF horg EQ 'h' THEN gprop_nn(i) = 1L
+				END
+			'SB'				: BEGIN
+				gprop_tag(i) = 33L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= N_ELEMENTS(mag_r)*N_ELEMENTS(flux_list)
+				IF horg EQ 'h' THEN gprop_nn(i) = 1L
+				END
+			'ConFrac_M'				: BEGIN
+				gprop_tag(i) = 34L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= N_ELEMENTS(conf_r)
+				END
+			'ConFrac_N'				: BEGIN
+				gprop_tag(i) = 35L
+				gprop_type(i)	= 2L
+				gprop_nn(i)		= N_ELEMENTS(conf_r)
+				END
+			'isclump'				: BEGIN
+				gprop_tag(i) = 36L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= 1L
+				END
+			'Domain_List'			: BEGIN
+				gprop_tag(i) = 37L
+				gprop_type(i)	= 1L
+				gprop_nn(i)		= settings.ndomain
+				END
+		ENDCASE
+
+	ENDFOR
+
+	gprop_map	= ['ID', 'ID_mbp', 'hostHaloID', 'numSubStruct', 'Structuretype', 'Mvir', 'Mass_tot', $
+		'Mass_FOF', 'Mass_200mean', 'Efrac', 'Mass_200crit', 'Rvir', 'R_size', 'R_200mean', 'R_200crit', $
+		'R_HalfMass', 'R_HalfMass_200mean', 'R_HalfMass_200crit', 'Rmax', 'Xc', 'Yc', 'Zc', 'VXc', 'VYc', 'VZc', $
+		'Lx', 'Ly', 'Lz', 'sigV', 'Vmax', 'npart', 'SFR', 'ABmag', 'SB', 'ConFrac_M', 'ConFrac_N', 'isclump', 'Domain_List']
+
+	;;-----
+	;; Make big array
+	;;-----
+	isdouble 	= WHERE(gprop_type EQ 2L, n_double)
+	islong 		= WHERE(gprop_type EQ 1L, n_long)
+	IF n_double + n_long NE N_ELEMENTS(gprop) THEN STOP
+
+	IF n_double GE 1L THEN nd_double = TOTAL(gprop_nn(isdouble)) ELSE nd_double = 1L
+	IF n_long GE 1L THEN nd_long = TOTAL(gprop_nn(islong)) ELSE nd_long = 1L
+
+	IF id0 LT 0L THEN nd_gal 	= N_ELEMENTS(ID) ELSE nd_gal = 1L
+
+	d_array	= DBLARR(nd_gal * nd_double)
+	l_array	= LONARR(nd_gal * nd_long)
+
+	;;-----
+	;; READ HDF5
+	;;-----
+	ftr_name 	= settings.dir_lib + 'src/fortran/read_cat_conly.so'
+		larr = LONARR(20) & darr = DBLARR(20)
+
+	larr(0)	= nd_gal
+	larr(1)	= nd_double
+	larr(2)	= nd_long
+	larr(3)	= N_ELEMENTS(gprop)
+	larr(4)	= N_ELEMENTS(flux_list)
+	IF horg EQ 'h' THEN larr(4) = 1L
+	larr(5) = N_ELEMENTS(ID)
+	larr(6) = N_ELEMENTS(gprop_map)
+	larr(7)	= N_ELEMENTS(mag_r)
+
+	void 	= CALL_EXTERNAL(ftr_name, 'read_cat', $
+		larr, darr, fname, snap0, id0, ID, d_array, l_array, gprop_tag, gprop_type, gprop_nn, gprop_map, flux_list)
+
+	;;-----
+	;; Allocate return array
+	;;-----
+	tmpstr 	= 'GP = {snapnum:0L, redsh:0.d, aexp:0.d, '
+	tmpstr += 'flux_list:flux_list, sfr_r:sfr_r, sfr_t:sfr_t, mag_r:mag_r, conf_r:conf_r, '
+
+	FOR i=0L, N_ELEMENTS(gprop)-1L DO BEGIN
+		
+
+
+		IF gprop_tag(i) EQ 32L OR gprop_tag(i) EQ 33L THEN BEGIN
+			FOR j=0L, N_ELEMENTS(flux_list)-1L DO BEGIN
+
+				IF horg EQ 'g' THEN tmpstr 	+= gprop(i) + '_' + STRTRIM(flux_list(j),2) + ':DBLARR(' + STRTRIM(N_ELEMENTS(mag_r),2) + ')'
+				IF horg EQ 'h' THEN tmpstr 	+= gprop(i) + '_' + STRTRIM(flux_list(j),2) + ':-1.d'
+
+				IF j LT N_ELEMENTS(flux_list)-1L THEN tmpstr += ', ' ELSE IF i LT N_ELEMENTS(gprop)-1L THEN tmpstr += ', ' ELSE tmpstr += '}'
+			ENDFOR
+			CONTINUE
+		ENDIF
+
+		tmpstr += gprop(i) + ':'
+
+		IF gprop_nn(i) EQ 1L THEN BEGIN
+			IF gprop_type(i) EQ 1L THEN tmpstr += '0L' ELSE IF gprop_type(i) EQ 2L THEN tmpstr += '0.d' ELSE STOP
+		ENDIF ELSE IF gprop_nn(i) GE 2L THEN BEGIN
+			IF gprop_type(i) EQ 1L THEN BEGIN
+				tmpstr += 'LONARR(' + STRTRIM(gprop_nn(i),2) + ')'
+			ENDIF ELSE IF gprop_type(i) EQ 2L THEN BEGIN
+				tmpstr += 'DBLARR(' + STRTRIM(gprop_nn(i),2) + ')'
+			ENDIF ELSE BEGIN
+				STOP
+			ENDELSE
+		ENDIF ELSE BEGIN
+			STOP
+		ENDELSE
+
+		IF i LT N_ELEMENTS(gprop)-1L THEN tmpstr += ', ' ELSE tmpstr += '}'
+	ENDFOR
+
+	void	= EXECUTE(tmpstr)
+
+	GP 	= REPLICATE(gp, nd_gal)
+
+	;;-----
+	;; Input to the array
+	;;-----
+
+	;; header
+	info 	= self->g_info(snap0)
+	GP.snapnum 	= snap0
+	GP.redsh 	= 1./info.aexp-1.d
+	GP.aexp 	= info.aexp
+
+	;; values
+	i_ind 	= 0L
+	d_ind 	= 0L
+	FOR i=0L, N_ELEMENTS(gprop)-1L DO BEGIN
+		IF horg EQ 'h' THEN BEGIN
+			IF gprop_tag(i) EQ 32L OR gprop_tag(i) EQ 33L THEN BEGIN
+				d_ind 	+= nd_gal
+				CONTINUE
+			ENDIF
+
+		ENDIF
+
+		tmpstr 	= 'GP.' + gprop_map(gprop_tag(i)) + ' = '
+		
+
+		IF gprop_tag(i) EQ 32L OR gprop_tag(i) EQ 33L THEN BEGIN
+			d_ind2 	= d_ind
+			FOR j=0L, N_ELEMENTS(flux_list)-1L DO BEGIN
+				tmpstr 	= 'GP.' + gprop_map(gprop_tag(i)) + '_' + STRTRIM(flux_list(j),2) + ' = '
+				tmpstr 	+= 'REFORM(d_array(' + STRTRIM(d_ind2,2) + ':' + STRTRIM(d_ind2 + nd_gal*N_ELEMENTS(mag_r)-1L,2) + '),' + STRTRIM(N_ELEMENTS(mag_r),2) + ',' + STRTRIM(nd_gal,2) + ')'
+				d_ind2 	+= nd_gal*N_ELEMENTS(mag_r)
+
+				void 	= EXECUTE(tmpstr)
+
+			ENDFOR
+
+			d_ind 	= d_ind2
+
+		ENDIF ELSE BEGIN
+			IF gprop_type(i) EQ 1L THEN BEGIN
+				IF gprop_nn(i) GE 2L THEN tmpstr += 'REFORM('
+				tmpstr 	+= 'l_array(' + STRTRIM(i_ind,2) + ':' + STRTRIM(i_ind + gprop_nn(i)*nd_gal-1L,2) + ')'
+				IF gprop_nn(i) GE 2L THEN tmpstr += ',' + STRTRIM(gprop_nn(i),2) + ',' + STRTRIM(nd_gal,2) + ')'
+				i_ind 	+= gprop_nn(i)*nd_gal
+			ENDIF ELSE IF gprop_type(i) EQ 2L THEN BEGIN
+				IF gprop_nn(i) GE 2L THEN tmpstr += 'REFORM('
+				tmpstr 	+= 'd_array(' + STRTRIM(d_ind,2) + ':' + STRTRIM(d_ind + gprop_nn(i)*nd_gal-1L,2) + ')'
+				IF gprop_nn(i) GE 2L THEN tmpstr += ',' + STRTRIM(gprop_nn(i),2) + ',' + STRTRIM(nd_gal,2) + ')'
+				d_ind 	+= gprop_nn(i)*nd_gal
+
+			ENDIF
+
+			void 	= EXECUTE(tmpstr)
+		ENDELSE
+
+
+	ENDFOR
+
+	RETURN, GP
+END
+
+
 FUNCTION veluga::r_gal_getdata, fid, str
 	did 	= H5D_OPEN(fid, str)
 	dumarr 	= H5D_READ(did)
@@ -181,7 +667,7 @@ END
 
 
 
-FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
+FUNCTION veluga::r_gal_old, snap0, id0, horg=horg, Gprop=Gprop
 	;+
 	; Load Galaxy/Halo Catalog Data.
 	; This method retrieves galaxy or halo catalog data for a given snapshot and object ID.
@@ -758,6 +1244,15 @@ FUNCTION veluga::r_tree_load, horg=horg
 	RETURN, (*self.tree)(tind)
 	
 END
+PRO veluga::r_tree_input, complete_tree, tree_key, horg=horg
+
+	IF horg EQ 'g' THEN tind = 0L
+	IF horg EQ 'h' THEN tind = 1L
+
+	(*self.tree)(tind).stat = 1L
+	(*self.tree)(tind).key	= PTR_NEW(tree_key)
+	(*self.tree)(tind).tree	= PTR_NEW(complete_tree)
+END
 FUNCTION veluga::r_tree, snap0, id0, horg=horg
 
 	;;-----
@@ -839,6 +1334,31 @@ END
 
 FUNCTION veluga::g_d3d, x, y, z, cen
 	RETURN, SQRT((x-cen(0))^2 + (y-cen(1))^2 + (z-cen(2))^2)
+END
+
+FUNCTION veluga::g_1dprof, x, y, nbin=nbin, xr=xr
+
+	IF ~KEYWORD_SET(nbin) THEN nbin = 20L
+	IF ~KEYWORD_SET(xr) THEN xr = [MIN(x), MAX(x)]
+
+	dx	= (xr(1)-xr(0))/nbin
+
+	px	= DBLARR(nbin)
+	py	= DBLARR(nbin)
+
+	FOR i=0L, nbin-1L DO BEGIN
+		x0	= dx*i
+		x1	= dx*i + dx
+
+		px(i)	= (x1+x0)/2.d
+
+		cut	= WHERE(x GE x0 AND x LT x1, ncut)
+		IF ncut EQ 0L THEN CONTINUE
+
+		py(i)	= TOTAL(y(cut))
+	ENDFOR
+
+	RETURN, {x:px, y:py, nbin:nbin, dx:dx, xr:xr}
 END
 
 FUNCTION veluga::g_cdist, zarr

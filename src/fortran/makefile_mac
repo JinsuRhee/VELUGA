@@ -9,7 +9,7 @@ CONDA_LIB = $(CONDA_PREFIX)/lib
 # Source Files
 BASES	= find_domain jsrd_part_totnum jsrd_part get_ptcl prop_time jsamr2cell_totnum jsamr2cell rv_match prop_sfr js_kde_2dhisto js_kde_gauss_binning js_kde_gauss_pts js_gasmap get_hash get_merit get_merit2 js_indmatch get_contam js_getpt_ft
 
-BASES_conly = save_cat
+BASES_conly = save_cat read_cat
 
 F90_SRCS	= $(BASES:=.f90)
 F90_OBJS	= $(BASES:=.o)
@@ -21,8 +21,9 @@ C_SRCS_CONLY	= $(BASES_conly:=_conly.c)
 DYLIBS_CONLY	= $(BASES_conly:%=%_conly.so)
 
 # Compilers
-FC = gfortran
-CC = gcc
+FC = $(CONDA_PREFIX)/bin/gfortran
+CC = $(CONDA_PREFIX)/bin/gcc
+H5CC = $(CONDA_PREFIX)/bin/h5cc
 
 # Flags
 ARCH = -arch x86_64
@@ -48,9 +49,9 @@ ckdtree:
 	$(FC) -dynamiclib $(OMP) $(ARCH) -L$(CONDA_LIB) -lomp $^ js_kdtree.o -o $@ -lgfortran
 
 %_conly.so: %_conly.c
-	$(CC) $(CLANG) $(OMP) $(PIC) $(ARCH) -I$(CONDA_INC) -L$(CONDA_LIB) $< -o $@
+	$(CC) $(CLANG) $(OMP) $(PIC) $(ARCH) -I$(CONDA_INC) -L$(CONDA_LIB) -lhdf5 $< -o $@
 
 clean:
-	rm -f *.o
+	rm -f *.o *.so
 
-.PHONT: all clean
+.PHONY: all clean

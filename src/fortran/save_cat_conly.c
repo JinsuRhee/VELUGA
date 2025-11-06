@@ -4,6 +4,174 @@
 #include <sys/resource.h>
 #include "hdf5.h"
 
+//for double
+void save_cat_write_d(hid_t fid, double *data, int ndata, char *fieldname){
+
+	hid_t dspace_id, dset_id;
+
+	//-----
+	// Data SPACE
+	//-----
+	hsize_t dims[1] = {ndata};
+	dspace_id = H5Screate_simple(1, dims, NULL);
+	
+	//-----
+	// Set Space
+	//-----
+	//printf(fieldname);
+	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_DOUBLE, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+	//-----
+	// SAVE
+	//-----
+	herr_t status;
+	status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+	//printf(status);
+	//-----
+	// Close
+	//-----
+	H5Dclose(dset_id);
+	H5Sclose(dspace_id);
+}
+//for double 2D
+void save_cat_write_d2(hid_t fid, double *data, int ndata, int ndata2, char *fieldname){
+
+	hid_t dspace_id, dset_id;
+
+	//-----
+	// Data SPACE
+	//-----
+	hsize_t dims[2] = {ndata, ndata2};
+	dspace_id = H5Screate_simple(2, dims, NULL);
+	
+	//-----
+	// Set Space
+	//-----
+	//printf(fieldname);
+	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_DOUBLE, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+	//-----
+	// SAVE
+	//-----
+	herr_t status;
+	status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+	//printf(status);
+	//-----
+	// Close
+	//-----
+	H5Dclose(dset_id);
+	H5Sclose(dspace_id);
+}
+//for int
+void save_cat_write_i(hid_t fid, int *data, int ndata, char *fieldname){
+
+	hid_t dspace_id, dset_id;
+
+	//-----
+	// Data SPACE
+	//-----
+	hsize_t dims[1] = {ndata};
+	dspace_id = H5Screate_simple(1, dims, NULL);
+	
+	//-----
+	// Set Space
+	//-----
+	//printf(fieldname);
+	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_INT, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+	//-----
+	// SAVE
+	//-----
+	herr_t status;
+	status = H5Dwrite(dset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+
+	//-----
+	// Close
+	//-----
+	H5Dclose(dset_id);
+	H5Sclose(dspace_id);
+}
+//for int64
+void save_cat_write_i64(hid_t fid, long long *data, long long ndata, char *fieldname){
+
+	hid_t dspace_id, dset_id;
+
+	//-----
+	// Data SPACE
+	//-----
+	hsize_t dims[1] = {ndata};
+	dspace_id = H5Screate_simple(1, dims, NULL);
+	
+	//-----
+	// Set Space
+	//-----
+	//printf(fieldname);
+	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_LLONG, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+	//-----
+	// SAVE
+	//-----
+	herr_t status;
+	status = H5Dwrite(dset_id, H5T_NATIVE_LLONG, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+	//printf(status);
+	//-----
+	// Close
+	//-----
+	H5Dclose(dset_id);
+	H5Sclose(dspace_id);
+}
+//for string
+void save_cat_write_s(hid_t fid, char **data, int ndata, char *fieldname){
+
+	hid_t dspace_id, dset_id;
+	//-----
+	// Data SPACE
+	//-----
+	size_t max_strlen = 0;
+	for (int i=0; i<ndata; i++){
+		size_t len = strlen(data[i]);
+		if(len > max_strlen) max_strlen = len;
+	}
+
+	hid_t str_type = H5Tcopy(H5T_C_S1);
+
+	H5Tset_size(str_type, max_strlen + 1);
+	H5Tset_strpad(str_type, H5T_STR_NULLTERM);
+	H5Tset_cset(str_type, H5T_CSET_ASCII);
+
+	hsize_t dims[1] = {ndata};
+	dspace_id = H5Screate_simple(1, dims, NULL);
+	
+	//-----
+	// Set Space
+	//-----
+	//printf(fieldname);
+	dset_id = H5Dcreate(fid, fieldname, str_type, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+	//-----
+	// SAVE
+	//-----
+	// String array to contiguous memory
+    	char (*flat_data)[max_strlen + 1] = malloc(ndata * (max_strlen + 1));
+    	for (int i = 0; i < ndata; i++) {
+        	strncpy(flat_data[i], data[i], max_strlen + 1);
+    	}
+
+	herr_t status;
+	status = H5Dwrite(dset_id, str_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, flat_data);
+
+	free(flat_data);
+
+	//printf(status);
+	//-----
+	// Close
+	//-----
+	H5Dclose(dset_id);
+	H5Sclose(dspace_id);
+	H5Tclose(str_type);
+}
+
+
 typedef struct {
    unsigned short slen;         /* length of the string         */
    short stype;                 /* Type of string               */
@@ -380,169 +548,4 @@ void save_cat(int argc, void *argv[])
   H5Fclose(file_id);
 }
 
-//for double
-void save_cat_write_d(hid_t fid, double *data, int ndata, char *fieldname){
 
-	hid_t dspace_id, dset_id;
-
-	//-----
-	// Data SPACE
-	//-----
-	hsize_t dims[1] = {ndata};
-	dspace_id = H5Screate_simple(1, dims, NULL);
-	
-	//-----
-	// Set Space
-	//-----
-	//printf(fieldname);
-	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_DOUBLE, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-	//-----
-	// SAVE
-	//-----
-	herr_t status;
-	status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
-	//printf(status);
-	//-----
-	// Close
-	//-----
-	H5Dclose(dset_id);
-	H5Sclose(dspace_id);
-}
-//for double 2D
-void save_cat_write_d2(hid_t fid, double *data, int ndata, int ndata2, char *fieldname){
-
-	hid_t dspace_id, dset_id;
-
-	//-----
-	// Data SPACE
-	//-----
-	hsize_t dims[2] = {ndata, ndata2};
-	dspace_id = H5Screate_simple(2, dims, NULL);
-	
-	//-----
-	// Set Space
-	//-----
-	//printf(fieldname);
-	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_DOUBLE, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-	//-----
-	// SAVE
-	//-----
-	herr_t status;
-	status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
-	//printf(status);
-	//-----
-	// Close
-	//-----
-	H5Dclose(dset_id);
-	H5Sclose(dspace_id);
-}
-//for int
-void save_cat_write_i(hid_t fid, int *data, int ndata, char *fieldname){
-
-	hid_t dspace_id, dset_id;
-
-	//-----
-	// Data SPACE
-	//-----
-	hsize_t dims[1] = {ndata};
-	dspace_id = H5Screate_simple(1, dims, NULL);
-	
-	//-----
-	// Set Space
-	//-----
-	//printf(fieldname);
-	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_INT, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-	//-----
-	// SAVE
-	//-----
-	herr_t status;
-	status = H5Dwrite(dset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
-
-	//-----
-	// Close
-	//-----
-	H5Dclose(dset_id);
-	H5Sclose(dspace_id);
-}
-//for int64
-void save_cat_write_i64(hid_t fid, long long *data, long long ndata, char *fieldname){
-
-	hid_t dspace_id, dset_id;
-
-	//-----
-	// Data SPACE
-	//-----
-	hsize_t dims[1] = {ndata};
-	dspace_id = H5Screate_simple(1, dims, NULL);
-	
-	//-----
-	// Set Space
-	//-----
-	//printf(fieldname);
-	dset_id = H5Dcreate(fid, fieldname, H5T_NATIVE_LLONG, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-	//-----
-	// SAVE
-	//-----
-	herr_t status;
-	status = H5Dwrite(dset_id, H5T_NATIVE_LLONG, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
-	//printf(status);
-	//-----
-	// Close
-	//-----
-	H5Dclose(dset_id);
-	H5Sclose(dspace_id);
-}
-//for string
-void save_cat_write_s(hid_t fid, char **data, int ndata, char *fieldname){
-
-	hid_t dspace_id, dset_id;
-	//-----
-	// Data SPACE
-	//-----
-	size_t max_strlen = 0;
-	for (int i=0; i<ndata; i++){
-		size_t len = strlen(data[i]);
-		if(len > max_strlen) max_strlen = len;
-	}
-
-	hid_t str_type = H5Tcopy(H5T_C_S1);
-
-	H5Tset_size(str_type, max_strlen + 1);
-	H5Tset_strpad(str_type, H5T_STR_NULLTERM);
-	H5Tset_cset(str_type, H5T_CSET_ASCII);
-
-	hsize_t dims[1] = {ndata};
-	dspace_id = H5Screate_simple(1, dims, NULL);
-	
-	//-----
-	// Set Space
-	//-----
-	//printf(fieldname);
-	dset_id = H5Dcreate(fid, fieldname, str_type, dspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-	//-----
-	// SAVE
-	//-----
-	// String array to contiguous memory
-    	char (*flat_data)[max_strlen + 1] = malloc(ndata * (max_strlen + 1));
-    	for (int i = 0; i < ndata; i++) {
-        	strncpy(flat_data[i], data[i], max_strlen + 1);
-    	}
-
-	herr_t status;
-	status = H5Dwrite(dset_id, str_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, flat_data);
-
-	free(flat_data);
-
-	//printf(status);
-	//-----
-	// Close
-	//-----
-	H5Dclose(dset_id);
-	H5Sclose(dspace_id);
-	H5Tclose(str_type);
-}
