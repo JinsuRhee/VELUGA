@@ -163,7 +163,6 @@ void read_cat(int argc, void *argv[])
 
 
   for(int i=0; i<n_all; i++){
-
 	  if(*id0>0 && *id0 != id[i]) continue;
 
 	  // Open Group

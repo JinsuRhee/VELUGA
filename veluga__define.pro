@@ -550,7 +550,7 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	larr(7)	= N_ELEMENTS(mag_r)
 
 	void 	= CALL_EXTERNAL(ftr_name, 'read_cat', $
-		larr, darr, fname, snap0, id0, ID, d_array, l_array, gprop_tag, gprop_type, gprop_nn, gprop_map, flux_list)
+		larr, darr, fname, LONG(snap0), LONG(id0), LONG(ID), d_array, l_array, gprop_tag, gprop_type, gprop_nn, gprop_map, flux_list)
 
 	;;-----
 	;; Allocate return array
