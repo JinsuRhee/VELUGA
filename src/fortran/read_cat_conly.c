@@ -29,7 +29,15 @@ void get_data(hid_t gid, double* d_array, int* l_array, char* base, int* header,
 	H5Sget_simple_extent_dims(space_id, dims, NULL);
 
 	if(d_nn != dims[0]){
-		printf("Wrong Mapping: %s // d_nn = %d and dims = %d \n ", base, d_nn, dims[0]);
+		 //printf("Wrong Mapping: %s // d_nn = %d and dims = %d \n ", base, d_nn, dims[0]);
+
+		for(int i=0; i<d_nn; i++){
+		        if(isdouble) d_array[(*header)] = -1.; else l_array[(*header)] = -1;
+		        (*header) ++;
+		}
+		H5Sclose(space_id);
+		H5Dclose(dset_id);
+		return;
 	}
 
 	if(isdouble){
