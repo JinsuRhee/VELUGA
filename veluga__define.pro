@@ -603,8 +603,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	;; header
 	info 	= self->g_info(snap0)
 	GP.snapnum 	= snap0
-	GP.redsh 	= 1./info.aexp-1.d
-	GP.aexp 	= info.aexp
+	IF info.stat NE 'ng' THEN BEGIN
+		GP.redsh 	= 1./info.aexp-1.d
+		GP.aexp 	= info.aexp
+	ENDIF
 
 	;; values
 	i_ind 	= 0L
@@ -2606,6 +2608,7 @@ FUNCTION veluga::g_potential, xx, yy, zz, mm, $
 		larr(0)	= N_ELEMENTS(mass)
 		larr(1) = 3L	;; dimension
 		larr(2)	= self.num_thread
+		IF larr(0) LE 64L*8L THEN larr(2) = 1L
 		IF p_type EQ 'mesh' THEN larr(3) = 0L ELSE IF p_type EQ 'pm' THEN larr(3) = 1L
 		IF e_type EQ 'pole' THEN larr(4) = 0L ELSE IF e_type EQ 'part' THEN larr(4) = 1L
 
@@ -2808,7 +2811,7 @@ FUNCTION veluga::g_celltype, n_snap, cell, xc, yc, zc, rc, vxc, vyc, vzc, dom_li
 	dumm(nc:np+nc-1L)	= *part.mp
 
 	pot 	= self->g_potential(dumx, dumy, dumz, dumm, bsize=bsize)
-	
+
 
 	IF cell.mtype EQ 0L THEN BEGIN
 		cell.PE 	= pot.PE(0L:nc-1L)
