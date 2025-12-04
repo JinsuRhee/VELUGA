@@ -34,7 +34,7 @@ PRO veluga::setthread, nn
 
 END
 
-FUNCTION veluga::allocate, nn, type=type, memeff=memeff
+FUNCTION veluga::allocate, nn, type=type, memeff=memeff, skipchem=skipchem, skipdust=skipdust
 
 	settings 	= self->getheader()
 	CASE type OF
@@ -64,8 +64,21 @@ FUNCTION veluga::allocate, nn, type=type, memeff=memeff
 				ENDIF ELSE BEGIN
 					additional_hvar_tag 	= settings.hydro_variables(6L:*)
 					tmp 	= {mtype:0L, N:nn, xx:da, yy:da, zz:da, vx:da, vy:da, vz:da, level:la, dx:da, den:da, temp:da, zp:da, mp:da, KE:da, UE:da, PE:da, P_thermal:da, levelind:LONARR(info.levmax+1L,3), dum1:pa, dum2:pa, dum3:pa, dum4:pa, dum5:pa, tag:'cell'}
-					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
-						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), da)
+
+					FOR nvar=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
+						IF KEYWORD_SET(skipchem) THEN BEGIN
+							cutchem	= WHERE(settings.chem_ind EQ nvar, ncutchem)
+							IF ncutchem GE 1L THEN CONTINUE
+						ENDIF
+						IF KEYWORD_SET(skipx_dust) THEN BEGIN
+							cutdust	= WHERE(settings.dust_ind EQ nvar, ncutdust)
+							IF ncutdust GE 1L THEN CONTINUE
+						ENDIF
+
+						tmp	= CREATE_STRUCT(tmp, settings.hydro_variables(nvar), da)
+					ENDFOR
+					;FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
+					;	tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), da)
 	
 					RETURN, tmp;REPLICATE(tmp, nn)
 				ENDELSE
@@ -75,8 +88,20 @@ FUNCTION veluga::allocate, nn, type=type, memeff=memeff
 				ENDIF ELSE BEGIN
 					additional_hvar_tag 	= settings.hydro_variables(6L:*)
 					tmp 	= {mtype:1L, N:nn, xx:PTR_NEW(1.d), yy:PTR_NEW(1.d), zz:PTR_NEW(1.d), vx:PTR_NEW(1.d), vy:PTR_NEW(1.d), vz:PTR_NEW(1.d), level:PTR_NEW(1.d), dx:PTR_NEW(1.d), den:PTR_NEW(1.d), temp:PTR_NEW(1.d), zp:PTR_NEW(1.d), mp:PTR_NEW(1.d), KE:PTR_NEW(1.d), UE:PTR_NEW(1.d), PE:PTR_NEW(1.d), P_thermal:PTR_NEW(1.d), levelind:LONARR(info.levmax+1L,3), dum1:PTR_NEW(1.d), dum2:PTR_NEW(1.d), dum3:PTR_NEW(1.d), dum4:PTR_NEW(1.d), dum5:PTR_NEW(1.d), tag:'cell'}
-					FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
-						tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), PTR_NEW(1.d))
+					FOR nvar=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
+						IF KEYWORD_SET(skipchem) THEN BEGIN
+							cutchem	= WHERE(settings.chem_ind EQ nvar, ncutchem)
+							IF ncutchem GE 1L THEN CONTINUE
+						ENDIF
+						IF KEYWORD_SET(skipx_dust) THEN BEGIN
+							cutdust	= WHERE(settings.dust_ind EQ nvar, ncutdust)
+							IF ncutdust GE 1L THEN CONTINUE
+						ENDIF
+
+						tmp	= CREATE_STRUCT(tmp, settings.hydro_variables(nvar), PTR_NEW(1.d))
+					ENDFOR
+					;FOR i=0L, N_ELEMENTS(additional_hvar_tag)-1L DO $
+					;	tmp 	= CREATE_STRUCT(tmp, additional_hvar_tag(i), PTR_NEW(1.d))
 	
 					RETURN, tmp;REPLICATE(tmp, nn)
 				ENDELSE
@@ -243,7 +268,6 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	conf_r 		= settings.conf_r ;self->r_gal_getdata(fid, 'CONF_R')
 	ID 			= self->r_gal_getdata(fid, 'ID')
 	H5F_CLOSE, fid
-
 
 	;;-----
 	;; Set & Mapping the column list
@@ -523,10 +547,12 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	;;-----
 	isdouble 	= WHERE(gprop_type EQ 2L, n_double)
 	islong 		= WHERE(gprop_type EQ 1L, n_long)
+	n_double 	= LONG(n_double)
+	n_long 		= LONG(n_long)
 	IF n_double + n_long NE N_ELEMENTS(gprop) THEN STOP
 
-	IF n_double GE 1L THEN nd_double = TOTAL(gprop_nn(isdouble)) ELSE nd_double = 1L
-	IF n_long GE 1L THEN nd_long = TOTAL(gprop_nn(islong)) ELSE nd_long = 1L
+	IF n_double GE 1L THEN nd_double = LONG(TOTAL(gprop_nn(isdouble))) ELSE nd_double = 1L
+	IF n_long GE 1L THEN nd_long = LONG(TOTAL(gprop_nn(islong))) ELSE nd_long = 1L
 
 	IF id0 LT 0L THEN nd_gal 	= N_ELEMENTS(ID) ELSE nd_gal = 1L
 
@@ -548,10 +574,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	larr(5) = N_ELEMENTS(ID)
 	larr(6) = N_ELEMENTS(gprop_map)
 	larr(7)	= N_ELEMENTS(mag_r)
-
+STOP
 	void 	= CALL_EXTERNAL(ftr_name, 'read_cat', $
 		larr, darr, fname, LONG(snap0), LONG(id0), LONG(ID), d_array, l_array, gprop_tag, gprop_type, gprop_nn, gprop_map, flux_list)
-
+STOP
 	;;-----
 	;; Allocate return array
 	;;-----
@@ -1953,7 +1979,7 @@ tic
 	RETURN, part
 END
 
-FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, timereport=timereport, memeff=memeff, force_levcut=force_levcut
+FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=g_simout, timereport=timereport, memeff=memeff, force_levcut=force_levcut, skip_chem=skip_chem, skip_dust=skip_dust
 	;;-----
 	;; Read AMR cells within a sphere
 	;;	snap0: [1] integer
@@ -2042,11 +2068,14 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		RETURN, cell
 	ENDIF
 
+	nvarhnew	= nvarh
+	IF KEYWORD_SET(skip_chem) THEN nvarhnew -= N_ELEMENTS(settings.chem_ind)
+       	IF KEYWORD_SET(skip_dust) THEN nvarhnew -= N_ELEMENTS(settings.dust_ind)
 
 	mesh_xg	= DBLARR(ntot,info.ndim)
 	mesh_vx	= DBLARR(ntot,info.ndim)
 	mesh_dx	= DBLARR(ntot)
-	mesh_hd	= DBLARR(ntot,nvarh)
+	mesh_hd	= DBLARR(ntot,nvarhnew)
 	mesh_lv	= LONARR(ntot)*0L - 10L
 	mesh_mp	= DBLARR(ntot)
 
@@ -2061,8 +2090,9 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 	;;-----
 	;; READ CELL
 	;;-----
+
 	ftr_name	= settings.dir_lib + 'src/fortran/jsamr2cell.so'
-		larr = LONARR(20) & darr = DBLARR(20)
+		larr = LONARR(30) & darr = DBLARR(20)
 		larr(0)	= ncpu;icpu
 		larr(2)	= self.num_thread
 		larr(3)	= STRLEN(file_a)
@@ -2078,7 +2108,16 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		larr(13)= ny
 		larr(14)= nz
 		larr(15)= nboundary
+		larr(16)= nvarhnew
 		larr(19)= force_levcut
+		larr(20)= -1L
+		IF KEYWORD_SET(skip_chem) THEN larr(20) = 1L
+		larr(21)= N_ELEMENTS(settings.chem_ind)
+
+		larr(22)= -1L
+		IF KEYWORD_SET(skip_dust) THEN larr(22) = 1L
+		larr(23)= N_ELEMENTS(settings.dust_ind)
+		
 		IF ~KEYWORD_SET(g_simout) THEN BEGIN
 			tokpc 	= (info.unit_l/info.cgs.kpc)	;; [kpc]
 			tokms	= info.kms 						;; [km/s]
@@ -2101,7 +2140,7 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 
 		void	= CALL_EXTERNAL(ftr_name, 'jsamr2cell', $
 			larr, darr, file_a, file_h, file_i, $
-			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, dom_list, levelind)
+			mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, dom_list, levelind, LONG(settings.chem_ind), LONG(settings.dust_ind))
 
 
 	TOC, elapsed_time=time_read
@@ -2116,11 +2155,18 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 	;	STOP
 	;ENDIF
 
-	IF ~KEYWORD_SET(memeff) THEN BEGIN
-		cell 	= self->allocate(ntot, type='cell')
-	ENDIF ELSE BEGIN
-		cell 	= self->allocate(ntot, type='cell', /memeff)
-	ENDELSE
+
+	tmpstr	= 'cell = self->allocate(ntot, type="cell"'
+	IF KEYWORD_SET(memeff) THEN tmpstr += ', /memeff'
+	IF KEYWORD_SET(skip_chem) THEN tmpstr += ',/skipchem'
+	IF KEYWORD_SET(skip_dust) THEN tmpstr += ',/skipdust'
+	tmpstr	+= ')'
+	void	= EXECUTE(tmpstr)
+	;IF ~KEYWORD_SET(memeff) THEN BEGIN
+	;	cell 	= self->allocate(ntot, type='cell')
+	;ENDIF ELSE BEGIN
+	;	cell 	= self->allocate(ntot, type='cell', /memeff)
+	;ENDELSE
 
 	TOC, elapsed_time=time_allocation
 	TIC
@@ -2151,13 +2197,24 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		cell.levelind 	= [levelind(0,*), levelind]
 	
 		IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
+			i3	= 6L
 			FOR i2=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
 				IF STRPOS(settings.hydro_variables(i2),'skip') GE 0L THEN CONTINUE
-	
+
+				IF KEYWORD_SET(skip_chem) THEN BEGIN
+					cutchem	= WHERE(settings.chem_ind EQ i2, ncutchem)
+					IF ncutchem GE 1L THEN CONTINUE
+				ENDIF
+				IF KEYWORD_SET(skip_dust) THEN BEGIN
+					cutdust	= WHERE(settings.dust_ind EQ i2, ncutdust)
+					IF ncutdust GE 1L THEN CONTINUE
+				ENDIF
+
 				str 	= 'cell.' + STRTRIM(settings.hydro_variables(i2),2) + $
-					' = mesh_hd(*,' + STRING(i2) + ')'
+					' = mesh_hd(*,' + STRING(i3) + ')'
 				void 	= EXECUTE(str)
 				;; [mass frac]
+				i3 ++
 			ENDFOR
 		ENDIF
 	ENDIF ELSE BEGIN
@@ -2183,12 +2240,22 @@ FUNCTION veluga::g_cell, snap0, xc2, yc2, zc2, rr2, dom_list=dom_list, g_simout=
 		cell.levelind 	= [levelind(0,*), levelind]
 
 		IF N_ELEMENTS(settings.hydro_variables) GT 7L THEN BEGIN
+			i3	= 6L
 			FOR i2=6L, N_ELEMENTS(settings.hydro_variables)-1L DO BEGIN
 				IF STRPOS(settings.hydro_variables(i2),'skip') GE 0L THEN CONTINUE
+				IF KEYWORD_SET(skip_chem) THEN BEGIN
+					cutchem	= WHERE(settings.chem_ind EQ i2, ncutchem)
+					IF ncutchem GE 1L THEN CONTINUE
+				ENDIF
+				IF KEYWORD_SET(skip_dust) THEN BEGIN
+					cutdust	= WHERE(settings.dust_ind EQ i2, ncutdust)
+					IF ncutdust GE 1L THEN CONTINUE
+				ENDIF
 	
 				str 	= 'cell.' + STRTRIM(settings.hydro_variables(i2),2) + $
-					' = PTR_NEW(mesh_hd(*,' + STRING(i2) + '))'
+					' = PTR_NEW(mesh_hd(*,' + STRING(i3) + '))'
 				void 	= EXECUTE(str)
+				i3 ++
 				;; [mass frac]
 			ENDFOR
 		ENDIF

@@ -190,11 +190,11 @@ void read_cat(int argc, void *argv[])
 
 		  //propbase	= gprop_map[gprop_tag[j]].s;
 	  	  //printf(" !!!  %d / %d \n", j, wpoint[i]);
-
+	  	  //if(i==48861 && gprop_type[j]==1) printf(" -- %d / %d \n", j, wpoint[j]);
 		  if(gprop_tag[j] == 32 || gprop_tag[j] == 33){
 			  //propbase	= 
 
-			  
+			   
 			  //printf(" ?? %d : %d \n", j, wpoint[j]);
 			  for(int k=0; k<n_flux; k++){
 			  	  wpoint2	= wpoint[j] + n_gal*n_aper*k;
@@ -208,14 +208,16 @@ void read_cat(int argc, void *argv[])
 				  //printf(" @@@@@ %d / %d \n", k, wpoint2);
 
 				  if(k==0) wpoint3	= wpoint2;
+				  
 			  }
 
 			  wpoint[j]	= wpoint3;
 			  
-		  }else if(gprop_tag[j] == 36 || gprop_tag[j] == 37){
+		  }else if(gprop_tag[j] == 36 || gprop_tag[j] == 37){ 	// isclump & domain list
 			  //propbase	= gprop_map[gprop_tag[j]].s;
 			  snprintf(propbase, sizeof(propbase), "%s", gprop_map[gprop_tag[j]].s);
 			  get_data(group_id, d_array, l_array, propbase, &wpoint[j], n_gal, gprop_nn[j], false, false);
+			  if(wpoint[j] > 47249552) printf("!!! --- %d / %d", i, wpoint[j]);
 		  }else{
 			  //propbase	= gprop_map[gprop_tag[j]].s;
 			  snprintf(propbase, sizeof(propbase), "%s", gprop_map[gprop_tag[j]].s);
