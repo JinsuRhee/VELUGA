@@ -217,7 +217,6 @@ void read_cat(int argc, void *argv[])
 			  //propbase	= gprop_map[gprop_tag[j]].s;
 			  snprintf(propbase, sizeof(propbase), "%s", gprop_map[gprop_tag[j]].s);
 			  get_data(group_id, d_array, l_array, propbase, &wpoint[j], n_gal, gprop_nn[j], false, false);
-			  if(wpoint[j] > 47249552) printf("!!! --- %d / %d", i, wpoint[j]);
 		  }else{
 			  //propbase	= gprop_map[gprop_tag[j]].s;
 			  snprintf(propbase, sizeof(propbase), "%s", gprop_map[gprop_tag[j]].s);

@@ -7,7 +7,7 @@ CONDA_INC = $(CONDA_PREFIX)/include
 CONDA_LIB = $(CONDA_PREFIX)/lib
 
 # Source Files
-BASES	= find_domain jsrd_part_totnum jsrd_part get_ptcl prop_time jsamr2cell_totnum jsamr2cell rv_match prop_sfr js_kde_2dhisto js_kde_gauss_binning js_kde_gauss_pts js_gasmap get_hash get_merit get_merit2 js_indmatch get_contam js_getpt_ft
+BASES	= find_domain jsrd_part_totnum jsrd_part get_ptcl prop_time jsamr2cell_totnum jsamr2cell rv_match prop_sfr js_kde_2dhisto js_kde_gauss_binning js_kde_gauss_pts js_gasmap get_hash get_merit get_merit2 js_indmatch get_contam js_getpt_ft js_vmap
 
 BASES_conly = save_cat read_cat
 

@@ -113,7 +113,6 @@ IF run EQ 2L THEN BEGIN
 		IF N_ELEMENTS(settings.column_list) NE n_match THEN $
 			PRINT, '        ***** There is a wrong typed one in column_list'
 	ENDFOR
-
 	IF settings.pp_saveprocess EQ 1L THEN SAVE, filename=dir_data + '/rv_io.sav', output
 	RETURN, PTR_NEW(output,/no_copy)
 ENDIF

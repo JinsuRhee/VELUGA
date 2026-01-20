@@ -65,7 +65,6 @@
       !  part%pos(i) = pos(:,i)
       !ENDDO
       !part%mm = mm(:)
-
       time(1)   = omp_get_wtime()
 
       tree_set%bsize = bsize
@@ -76,7 +75,6 @@
       !tree_set%np_dmax_tag = -1
       !tree_set%np_mass_tag = 1
       root = js_kdtree_mktree(pos, mm, orgind, tree_set)!bsize, d_type, v_type, n_dim, n_thread)
-
       time(2)   = omp_get_wtime()
       !!-----
       !! GET LEAF ONLY

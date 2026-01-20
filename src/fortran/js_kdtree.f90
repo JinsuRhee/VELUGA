@@ -44,7 +44,7 @@ CONTAINS
         INTEGER(KIND=4), DIMENSION(:), ALLOCATABLE :: inddum, nums
         INTEGER(KIND=4) idoffset, ind0, ind1, lind, rind, indoffset
         INTEGER(KIND=4) memdebug, mem_nn
-
+PRINT*, 'Tree in'
         !! Initialize
         npart   = SIZE(mm)
         !info%bsize      = bsize
@@ -65,7 +65,6 @@ CONTAINS
             EXIT
           ENDIF
         ENDDO
-
         !! Make initial nodes for parallelization
         IF(ALLOCATED(root)) DEALLOCATE(root)
         ALLOCATE(root(1:npart))
@@ -75,7 +74,6 @@ CONTAINS
         info2%dtype = 0
         info2%vtype = 0
         info2%omp_tag = 1
-
         DO i=1, info%ndim
           root(1)%bnd(i,1) = MINVAL(pos(:,i))
           root(1)%bnd(i,2) = MAXVAL(pos(:,i))
@@ -87,7 +85,6 @@ CONTAINS
         bend = npart
         CALL js_kdtree_buildnode(root, pos, mm, orgind, info2, &
                 numnode, bstart, bend, level)
-
         IF(info2%bsize .LE. info%bsize) THEN
           !!----- No need to make further son nodes
           RETURN

@@ -1,11 +1,12 @@
 !234567
       SUBROUTINE jsamr2cell(larr, darr, fname_a, fname_h, fname_i, &
-                    mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, domlist, levind)
+                    mg_ind, mesh_xg, mesh_dx, mesh_hd, mesh_lv, mesh_mp, &
+                    domlist, levind, chemind, dustind)
 
       USE omp_lib
       IMPLICIT NONE
 
-      INTEGER(KIND=4) larr(20)
+      INTEGER(KIND=4) larr(30)
       REAL(KIND=8) darr(20)
 
       CHARACTER(larr(4)) fname_a
@@ -20,11 +21,12 @@
       INTEGER(KIND=4) mesh_lv(larr(11))
       INTEGER(KIND=4) domlist(larr(1))
       INTEGER(KIND=4) levind(larr(10),3)
+      INTEGER(KIND=4) chemind(larr(22)), dustind(larr(24))
 
 !!!!! LOCAL VARIABLES
 
-      INTEGER(KIND=4) i, j, k, ndom, n_thread, ncpu, ndim, levelmin, levelmax
-      INTEGER(KIND=4) nx, ny, nz, nvarh, ntot, nboundary
+      INTEGER(KIND=4) i, j, k, l, ndom, n_thread, ncpu, ndim, levelmin, levelmax
+      INTEGER(KIND=4) nx, ny, nz, nvarh, ntot, nboundary, nvarhnew
       INTEGER(KIND=4) icpu, omp_ind, levind_tmp(larr(10))
 
       INTEGER(KIND=4) ilev, i0, i1, ind0, ind1
@@ -38,6 +40,9 @@
       REAL(KIND=8) mesh_hd2(larr(11),larr(12))
       INTEGER(KIND=4) mesh_lv2(larr(11))
       REAL(KIND=8) tokpc, tokms, toKmu, tocc, tomsun
+      INTEGER(KIND=4) skipchem, skipdust, nvarnew, ivar, ivar0
+      INTEGER(KIND=4) nchem, ndust
+      LOGICAL ok_ind
 
       ndom        = larr(1)
       n_thread    = larr(3)
@@ -51,6 +56,11 @@
       ny          = larr(14)
       nz          = larr(15)
       nboundary   = larr(16)
+      nvarhnew    = larr(17)
+      skipchem    = larr(21)
+      nchem       = larr(22)
+      skipdust    = larr(23)
+      ndust       = larr(24)
 
       tokpc       = darr(1)
       tokms       = darr(2)
@@ -72,7 +82,9 @@
 
         levind_tmp  = 0
 
-        CALL jsamr2cell_read(larr, icpu, omp_ind, fname_a, fname_h, mesh_xg2, mesh_dx2, mesh_lv2, mesh_hd2, levind_tmp)
+        CALL jsamr2cell_read(larr, icpu, omp_ind, fname_a, fname_h, &
+                mesh_xg2, mesh_dx2, mesh_lv2, mesh_hd2, levind_tmp, &
+                chemind, dustind)
 
         levind2(i,:)   = levind_tmp
       ENDDO
@@ -130,7 +142,8 @@
       !$OMP & shared(ind_onlevel, levind2, ndom, levelmin, levelmax, nvarh) &
       !$OMP & shared(mesh_xg, mesh_dx, mesh_lv, mesh_hd, mesh_mp) &
       !$OMP & shared(mesh_xg2, mesh_dx2, mesh_lv2, mesh_hd2) &
-      !$OMP & private(ind0, ind1, i, i0, i1, j)
+      !$OMP & shared(nchem, ndust, nvarhnew) &
+      !$OMP & private(ind0, ind1, i, i0, i1, j, l, ivar0, ivar, ok_ind)
       DO ilev=levelmin, levelmax
         ind0  = ind_onlevel(ilev,1) !! starting index
 
@@ -169,7 +182,33 @@
           mesh_mp(ind0:ind1)    = mesh_hd2(i0:i1,1)*(mesh_dx2(i0:i1)**3.)*tomsun
 
           IF(nvarh .GE. 7) THEN
-            mesh_hd(ind0:ind1,7:nvarh)  = mesh_hd2(i0:i1,7:nvarh)
+            ivar0 = 7
+            DO ivar=7, nvarh
+              ok_ind = .true.
+              IF(skipchem .EQ. 1) THEN
+                DO l=1, nchem
+                  IF(ivar .EQ. chemind(l)+1) THEN
+                    ok_ind = .false.
+                    EXIT
+                  ENDIF
+                ENDDO
+              ENDIF
+
+              IF(skipdust .EQ. 1) THEN
+                DO l=1, ndust
+                  IF(ivar .EQ. dustind(l)+1) THEN
+                    ok_ind = .false.
+                    EXIT
+                  ENDIF
+                ENDDO
+              ENDIF
+
+              IF(ok_ind) THEN
+                mesh_hd(ind0:ind1,ivar0) = mesh_hd2(i0:i1,ivar0)
+                ivar0 = ivar0 + 1
+              ENDIF
+            ENDDO
+
           ENDIF
 
           ind0 = ind1 + 1
@@ -180,18 +219,21 @@
       !!-----
       !! READING ROUTINE
       !!-----
-      SUBROUTINE jsamr2cell_read(larr, icpu, omp_ind, fname_a, fname_h, mesh_xg, mesh_dx, mesh_lv, mesh_hd, levind_tmp)
+      SUBROUTINE jsamr2cell_read(larr, icpu, omp_ind, fname_a, fname_h, &
+        mesh_xg, mesh_dx, mesh_lv, mesh_hd, levind_tmp, chemind, dustind)
 
       USE OMP_lib
       IMPLICIT NONE
       
-      INTEGER(KIND=4) larr(20), icpu, omp_ind
+      INTEGER(KIND=4) larr(30), icpu, omp_ind
 
       REAL(KIND=8) mesh_xg(larr(11),larr(8))
       REAL(KIND=8) mesh_dx(larr(11))
       REAL(KIND=8) mesh_hd(larr(11),larr(12))
       INTEGER(KIND=4) mesh_lv(larr(11))
       INTEGER(KIND=4) levind_tmp(larr(10))
+      INTEGER(KIND=4) chemind(larr(22)), dustind(larr(24))
+
       
 
       CHARACTER(larr(4)) fname_a
@@ -209,6 +251,8 @@
 
       INTEGER(KIND=4) ix, iy, iz, ngrida, nx, ny, nz, twotondim
       INTEGER(KIND=4) force_levcut
+      INTEGER(KIND=4) skipchem, skipdust, nvarhnew
+      INTEGER(KIND=4) ivar0
 
       REAL(KIND=8), DIMENSION(1:3) :: xbound=(/0d0,0d0,0d0/)
       REAL(KIND=8), DIMENSION(1:8,1:3) :: xc
@@ -217,8 +261,10 @@
       REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE ::x, xg
       REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE ::var
       INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: son
-      LOGICAL ok_cell
+      LOGICAL ok_cell, ok_ind
       
+
+      INTEGER(KIND=4) nchem, ndust
 
       CHARACTER(100) domnum, fdum_a, fdum_h, ordering
 
@@ -233,9 +279,15 @@
       nx        = larr(13)
       ny        = larr(14)
       nz        = larr(15)
+      nvarhnew  = larr(17)
 
       force_levcut = larr(20)
       
+      skipchem    = larr(21)
+      nchem       = larr(22)
+      skipdust    = larr(23)
+      ndust       = larr(24)
+
       ngrid   = 0
       ordering = 'hilbert'
       twotondim = 2**ndim
@@ -388,8 +440,31 @@
                 mesh_lv(omp_ind)   = ilevel
 
                 levind_tmp(ilevel)  = omp_ind
+                ivar0 = 1
                 DO ivar=1, nvarh
-                  mesh_hd(omp_ind,ivar) = var(k, ind, ivar)
+                  ok_ind = .true.
+                  IF(skipchem .EQ. 1) THEN
+                    DO l=1, nchem
+                      IF(ivar .EQ. chemind(l)+1) THEN
+                        ok_ind = .false.
+                        EXIT
+                      ENDIF
+                    ENDDO
+                  ENDIF
+
+                  IF(skipdust .EQ. 1) THEN
+                    DO l=1, ndust
+                      IF(ivar .EQ. dustind(l)+1) THEN
+                        ok_ind = .false.
+                        EXIT
+                      ENDIF
+                    ENDDO
+                  ENDIF
+
+                  IF(ok_ind) THEN
+                    mesh_hd(omp_ind,ivar0) = var(k, ind, ivar)
+                    ivar0 = ivar0 + 1
+                  ENDIF
                 ENDDO
               ENDIF
             ENDDO

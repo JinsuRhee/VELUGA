@@ -551,8 +551,8 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	n_long 		= LONG(n_long)
 	IF n_double + n_long NE N_ELEMENTS(gprop) THEN STOP
 
-	IF n_double GE 1L THEN nd_double = LONG(TOTAL(gprop_nn(isdouble))) ELSE nd_double = 1L
-	IF n_long GE 1L THEN nd_long = LONG(TOTAL(gprop_nn(islong))) ELSE nd_long = 1L
+	IF n_double GE 1L THEN nd_double = TOTAL(gprop_nn(isdouble), /integer) ELSE nd_double = 1L
+	IF n_long GE 1L THEN nd_long = TOTAL(gprop_nn(islong), /integer) ELSE nd_long = 1L
 
 	IF id0 LT 0L THEN nd_gal 	= N_ELEMENTS(ID) ELSE nd_gal = 1L
 
@@ -574,10 +574,10 @@ FUNCTION veluga::r_gal, snap0, id0, horg=horg, Gprop=Gprop
 	larr(5) = N_ELEMENTS(ID)
 	larr(6) = N_ELEMENTS(gprop_map)
 	larr(7)	= N_ELEMENTS(mag_r)
-STOP
+
 	void 	= CALL_EXTERNAL(ftr_name, 'read_cat', $
 		larr, darr, fname, LONG(snap0), LONG(id0), LONG(ID), d_array, l_array, gprop_tag, gprop_type, gprop_nn, gprop_map, flux_list)
-STOP
+
 	;;-----
 	;; Allocate return array
 	;;-----
@@ -1576,7 +1576,7 @@ FUNCTION veluga::g_circle, x, y, r
 	RETURN, {x:COS(ang)*r + x, y:SIN(ang)*r + y}
 END
 ;;----- Smoothing related
-FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
+FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma, sigma=sigma
 	yy 	= yy2
 	nn 	= N_ELEMENTS(yy)
 
@@ -1619,6 +1619,7 @@ FUNCTION veluga::g_smooth_mafit, xx, yy2, nstep, dir, n_sigma
 			avg 	= MEAN(dummy)
 			std 	= STDDEV(dummy)
 			cut 	= WHERE( ABS(dummy - avg) LT std*n_sigma)
+
 			yy(i) 	= MEAN( dummy(cut) )
 		ENDELSE
 	ENDFOR
@@ -1660,7 +1661,7 @@ FUNCTION veluga::g_smooth, xx, yy, type=type, $
 			IF ~KEYWORD_SET(MA_direction) THEN MA_direction = 'F'
 			IF ~KEYWORD_SET(MA_nsigma) THEN MA_nsigma = -1.d
 			MA_direction 	= STRUPCASE(MA_direction)
-			RETURN, self->g_smooth_mafit(xx, yy, MA_step, MA_direction, MA_nsigma)
+			RETURN, self->g_smooth_mafit(xx, yy, MA_step, MA_direction, MA_nsigma, /sigma)
 			END
 	ENDCASE
 
@@ -4720,7 +4721,7 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 	cell_type=cell_type, cell_weight=cell_weight, part_type=part_type, part_weight=part_weight, $
 	fig_dx=fig_dx, fig_dy=fig_dy, fig_dz=fig_dz, fig_rot=fig_rot, fig_proj=fig_proj, fig_npix=fig_npix, fig_bw=fig_bw, $
 	etc_nchunk=etc_nchunk, dom_list=dom_list, minlev=minlev, maxlev=maxlev, info=info, $
-	newver=newver
+	newver=newver, vmap_on=vmap_on, vmap_npix=vmap_npix, vmap_vmax=vmax_vmax
 
 	;IF ~KEYWORD_SET(newver) THEN STOP
 	;xc, yc, zc, dx : center and boxlength to load data [xc-dx,xc+dx]X ...
@@ -4796,6 +4797,9 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 	IF ~KEYWORD_SET(minlev) THEN minlev = info.levmin
 	IF ~KEYWORD_SET(maxlev) THEN maxlev = info.levmax
 
+	IF ~KEYWORD_SET(vmap_npix) AND N_ELEMENTS(vmap_on) GE 1L THEN vmap_npix = 50L
+	IF ~KEYWORD_SET(vmap_vmax) AND N_ELEMENTS(vmap_on) GE 1L THEN vmap_vmax = 250.d
+
 
 	center 	= [xc, yc, zc] ;; initial center
 	;;----- GET DOMAIN
@@ -4858,6 +4862,10 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 		ENDFOR
 	ENDIF
 
+	;; For Vector map
+	IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+		vmap_arr 	= REPLICATE({xx:PTR_NEW(), yy:PTR_NEW(), zz:PTR_NEW(), vx:PTR_NEW(), vy:PTR_NEW(), mass:PTR_NEW(), narr:0L}, N_ELEMENTS(domchunk))
+	ENDIF
 	;; Loop
 	FOR i=0L, N_ELEMENTS(domchunk) - 1L DO BEGIN
 
@@ -5009,6 +5017,19 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					p_fig_dx 	= fig_dx
 					p_fig_dy	= fig_dy
 					p_fig_dz	= fig_dz
+
+					IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+						v_center 	= [vmap_on(0), vmap_on(1), vmap_on(2)]
+						vmap_arr(i).xx 	=  PTR_NEW(*cdum.xx)
+						vmap_arr(i).yy 	=  PTR_NEW(*cdum.yy)
+						vmap_arr(i).zz 	=  PTR_NEW(*cdum.zz)
+						vmap_arr(i).vx 	=  PTR_NEW(*cdum.vx)
+						vmap_arr(i).vy 	=  PTR_NEW(*cdum.vy)
+						vmap_arr(i).mass=  PTR_NEW(*cdum.mp)
+						vmap_arr(i).narr = cdum.n
+
+					ENDIF
+
 					END
 				'YZ'	: BEGIN
 					dumx 	= cdum.xx
@@ -5021,6 +5042,17 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					p_fig_dy	= fig_dz
 					p_fig_dz	= fig_dx
 
+					IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+						v_center 	= [vmap_on(1), vmap_on(2), vmap_on(0)]
+						vmap_arr(i).xx 	=  PTR_NEW(*cdum.yy)
+						vmap_arr(i).yy 	=  PTR_NEW(*cdum.zz)
+						vmap_arr(i).zz 	=  PTR_NEW(*cdum.xx)
+						vmap_arr(i).vx 	=  PTR_NEW(*cdum.vy)
+						vmap_arr(i).vy 	=  PTR_NEW(*cdum.vz)
+						vmap_arr(i).mass=  PTR_NEW(*cdum.mp)
+						vmap_arr(i).narr = cdum.n
+					ENDIF
+					
 					END
 				'XZ'	: BEGIN
 					dumy 	= cdum.yy
@@ -5031,6 +5063,17 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					p_fig_dx	= fig_dx
 					p_fig_dy	= fig_dz
 					p_fig_dz	= fig_dy
+
+					IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+						v_center 	= [vmap_on(0), vmap_on(2), vmap_on(1)]
+						vmap_arr(i).xx 	=  PTR_NEW(*cdum.xx)
+						vmap_arr(i).yy 	=  PTR_NEW(*cdum.zz)
+						vmap_arr(i).zz 	=  PTR_NEW(*cdum.yy)
+						vmap_arr(i).vx 	=  PTR_NEW(*cdum.vx)
+						vmap_arr(i).vy 	=  PTR_NEW(*cdum.vz)
+						vmap_arr(i).mass=  PTR_NEW(*cdum.mp)
+						vmap_arr(i).narr = cdum.n
+					ENDIF
 
 					END
 				'YX'	: BEGIN
@@ -5043,6 +5086,18 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					p_fig_dy	= fig_dx
 					p_fig_dz	= fig_dz
 
+					IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+						v_center 	= [vmap_on(1), vmap_on(0), vmap_on(2)]
+						vmap_arr(i).xx 	=  PTR_NEW(*cdum.yy)
+						vmap_arr(i).yy 	=  PTR_NEW(*cdum.xx)
+						vmap_arr(i).zz 	=  PTR_NEW(*cdum.zz)
+						vmap_arr(i).vx 	=  PTR_NEW(*cdum.vy)
+						vmap_arr(i).vy 	=  PTR_NEW(*cdum.vx)
+						vmap_arr(i).mass=  PTR_NEW(*cdum.mp)
+						vmap_arr(i).narr = cdum.n
+					ENDIF
+					
+
 					END 
 				'ZY'	: BEGIN
 					dumx 	= cdum.xx
@@ -5053,6 +5108,18 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					p_fig_dx	= fig_dz
 					p_fig_dy	= fig_dy
 					p_fig_dz	= fig_dx
+
+					IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+						v_center 	= [vmap_on(2), vmap_on(1), vmap_on(0)]
+						vmap_arr(i).xx 	=  PTR_NEW(*cdum.zz)
+						vmap_arr(i).yy 	=  PTR_NEW(*cdum.yy)
+						vmap_arr(i).zz 	=  PTR_NEW(*cdum.xx)
+						vmap_arr(i).vx 	=  PTR_NEW(*cdum.vz)
+						vmap_arr(i).vy 	=  PTR_NEW(*cdum.vy)
+						vmap_arr(i).mass=  PTR_NEW(*cdum.mp)
+						vmap_arr(i).narr = cdum.n
+					ENDIF
+				
 
 					END
 				'ZX'	: BEGIN
@@ -5066,6 +5133,17 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 					p_fig_dx	= fig_dz
 					p_fig_dy	= fig_dx
 					p_fig_dz	= fig_dy
+
+					IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+						v_center 	= [vmap_on(2), vmap_on(0), vmap_on(1)]
+						vmap_arr(i).xx 	=  PTR_NEW(*cdum.zz)
+						vmap_arr(i).yy 	=  PTR_NEW(*cdum.xx)
+						vmap_arr(i).zz 	=  PTR_NEW(*cdum.yy)
+						vmap_arr(i).vx 	=  PTR_NEW(*cdum.vz)
+						vmap_arr(i).vy 	=  PTR_NEW(*cdum.vx)
+						vmap_arr(i).mass=  PTR_NEW(*cdum.mp)
+						vmap_arr(i).narr = cdum.n
+					ENDIF
 
 					END
 			ENDCASE
@@ -5092,7 +5170,44 @@ FUNCTION veluga::d_box2map, snap, xc, yc, zc, dx, d_cell=d_cell, d_part=d_part, 
 		
 	ENDFOR
 	
+	IF N_ELEMENTS(vmap_on) GE 1L THEN BEGIN
+		ntot_cell 	= TOTAL(vmap_arr.narr, /integer)
+		vmap_xx 	= DBLARR(ntot_cell)
+		vmap_yy 	= DBLARR(ntot_cell)
+		vmap_zz 	= DBLARR(ntot_cell)
+		vmap_vx 	= DBLARR(ntot_cell)
+		vmap_vy 	= DBLARR(ntot_cell)
+		vmap_mm 	= DBLARR(ntot_cell)
 
+		i0 	= 0L
+		FOR i=0L, N_ELEMENTS(vmap_arr)-1L DO BEGIN
+			IF vmap_arr(i).narr EQ 0L THEN CONTINUE
+
+			i1 	= i0 + vmap_arr(i).narr - 1L
+
+			vmap_xx(i0:i1) 	= *(vmap_arr(i).xx)
+			vmap_yy(i0:i1) 	= *(vmap_arr(i).yy)
+			vmap_zz(i0:i1) 	= *(vmap_arr(i).zz)
+			vmap_vx(i0:i1) 	= *(vmap_arr(i).vx) - v_center(0)
+			vmap_vy(i0:i1) 	= *(vmap_arr(i).vy) - v_center(1)
+			vmap_mm(i0:i1) 	= *(vmap_arr(i).mass)
+			
+			PTR_FREE, vmap_arr(i).xx
+			PTR_FREE, vmap_arr(i).yy
+			PTR_FREE, vmap_arr(i).zz
+			PTR_FREE, vmap_arr(i).vx
+			PTR_FREE, vmap_arr(i).vy
+			PTR_FREE, vmap_arr(i).mass
+			i0 	= i1 + 1L
+		ENDFOR
+
+		vmap_xr 	= p_center(0) + [-1., 1.]*fig_dx
+		vmap_yr 	= p_center(1) + [-1., 1.]*fig_dy
+		vmap_zr 	= p_center(2) + [-1., 1.]*fig_dz
+
+		vmap_on 	= self->g_vmap(vmap_xx, vmap_yy, vmap_zz, vmap_vx, vmap_vy, vmap_mm, xr=vmap_xr, yr=vmap_yr, zr=vmap_zr, n_pix=vmap_npix, maxv=vmap_vmax)
+		
+	ENDIF
 
 
 	denmap 	= []
@@ -5291,6 +5406,120 @@ STOP
 
 	pmap	= lmap / photoE
 	RETURN, pmap
+END
+
+;;----- Get Velocity Field Map
+FUNCTION veluga::g_vmap, x2, y2, z2, vx2, vy2, mass2, xr=xr, yr=yr, zr=zr, n_pix=n_pix, maxv=maxv
+
+	header 		= self->getheader()
+	num_thread = self.num_thread
+
+	IF ~KEYWORD_SET(n_pix) THEN n_pix = 50L
+
+	;;----- ALLOCATE
+	x = x2 & y = y2 & z = z2 & vx = vx2 & vy = vy2 & mass = mass2
+	
+	;;----- MANAGE
+	dx 	= (xr(1) - xr(0)) / n_pix
+	cut 	= WHERE(z GT zr(0) AND z LT zr(1))
+	x = x(cut) & y = y(cut) & mass = mass(cut)
+	vx = vx(cut) & vy = vy(cut)
+
+	ix	= LONG( (x - xr(0))/dx )
+	iy	= LONG( (y - yr(0))/dx )
+
+	vmap0	= DBLARR(n_pix,n_pix, 2)
+	vmap1	= DBLARR(n_pix,n_pix, 2)
+
+	;;---
+	ind 	= LINDGEN(n_pix)
+
+	vmap0(*,*,0) 	= REBIN(ind, n_pix, n_pix) * dx + 0.5*dx + xr(0)
+	vmap0(*,*,1) 	= REBIN(TRANSPOSE(ind), n_pix, n_pix) * dx + 0.5*dx + yr(0)
+
+	vmap_dum 	= DBLARR(n_pix,n_pix,3)
+
+
+
+	ftr_name 	= header.dir_lib + 'src/fortran/js_vmap.so'
+	larr = LONARR(20) & darr = DBLARR(20)
+	larr(0)	= N_ELEMENTS(ix)
+	larr(1) = N_ELEMENTS(vx)
+	larr(2)	= n_pix
+	larr(3) = num_thread
+
+	void	= CALL_EXTERNAL(ftr_name, 'js_vmap', $
+		larr, darr, LONG(ix), LONG(iy), DOUBLE(vx), DOUBLE(vy), DOUBLE(mass), vmap_dum)
+
+	vx_d	= REFORM(vmap_dum(*,*,0), n_pix*n_pix)
+	vy_d	= REFORM(vmap_dum(*,*,1), n_pix*n_pix)
+	mm_d	= REFORM(vmap_dum(*,*,2), n_pix*n_pix)
+
+	cut 	= WHERE(mm_d GT 0., ncut)
+	dum_x	= vx_d*0.d
+	dum_y	= vy_d*0.d
+	IF ncut GE 1L THEN BEGIN
+		dum_x(cut)	= vx_d(cut) / mm_d(cut)
+		dum_y(cut)	= vy_d(cut) / mm_d(cut)
+	ENDIF
+
+	vmap1(*,*,0)	= REFORM(dum_x, n_pix, n_pix)
+	vmap1(*,*,1)	= REFORM(dum_y, n_pix, n_pix)
+
+	norm_v	= SQRT(vmap1(*,*,0)^2 + vmap1(*,*,1)^2)
+	IF ~KEYWORD_SET(maxv) THEN maxv = MAX(norm_v)
+
+	vx_d	= REFORM(vmap1(*,*,0), n_pix*n_pix)
+	vy_d	= REFORM(vmap1(*,*,1), n_pix*n_pix)
+	norm_v	= REFORM(norm_v, n_pix*n_pix)
+
+	cut1	= WHERE(norm_v LT maxv)
+	cut2	= WHERE(norm_v GE maxv)
+
+	norm_v(cut1)	= maxv
+	cut	= WHERE(norm_v GT 0., nn)
+	IF nn GE 1L THEN BEGIN
+		vx_d 	/= norm_v
+		vy_d	/= norm_v
+	ENDIF
+	vmap1(*,*,0)	= REFORM(vx_d, n_pix, n_pix) * dx * SQRT(2.d) / 3.d
+	vmap1(*,*,1)	= REFORM(vy_d, n_pix, n_pix) * dx * SQRT(2.d) / 3.d
+	;; x0, y0, offset check
+	;; draw check
+
+	;FOR i=0L, n_pix-1L DO BEGIN
+	;	FOR j=0L, n_pix-1L DO BEGIN
+	;		cut 	= WHERE(ix EQ i AND iy EQ j, ncut)
+	;		;IF ncut EQ 0L THEN CONTINUE
+	;		IF ncut LE 5L THEN CONTINUE
+	;
+	;		xx 	= js_wmean(vx(cut), mass(cut))
+	;		yy	= js_wmean(vy(cut), mass(cut))
+	;	       
+	;
+	;		vv 	= [xx, yy]
+	;		;vv 	= vv / NORM(vv) * dx * 0.5
+	;		vv	= (((vv / 250) < 1.) > (-1.)) * dx * 0.5 * SQRT(2.) * 2.
+	;		;vv	= (((vv / 100) < 1.) > (-1.)) * dx * 0.5 * SQRT(2.)*2.
+	;		;IF NORM(vv) GT dx THEN STOP
+	;		x0 	= dx*(i+0.5) + xr(0)
+	;		y0 	= dx*(j+0.5) + yr(0)
+	;
+	;		vv 	= vv + [x0, y0]
+	;		vmap0(i,j,0) 	= x0
+	;		vmap0(i,j,1) 	= y0
+	;		vmap1(i,j,0) 	= vv(0)
+	;		vmap1(i,j,1) 	= vv(1)
+	;	ENDFOR
+	;ENDFOR
+
+	x0 	= REFORM(vmap0(*,*,0), n_pix*n_pix)
+	y0 	= REFORM(vmap0(*,*,1), n_pix*n_pix)
+	x1 	= x0 + REFORM(vmap1(*,*,0), n_pix*n_pix)
+	y1 	= y0 + REFORM(vmap1(*,*,1), n_pix*n_pix)
+
+	RETURN, {x0:x0, y0:y0, x1:x1, y1:y1}
+
 END
 
 ;;----- Get Cosmological distance
